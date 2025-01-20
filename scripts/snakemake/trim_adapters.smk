@@ -138,11 +138,12 @@ rule trim_adapters:
     log:
         log = os.path.join(LOG_DIR, "bbduk_trim.{sample}.log")
     threads:
-        THREADS
+        4
     resources:
         mem_mb = get_mem_from_threads,  # dynamically compute MB based on threads
         time = "12:00:00",             # e.g. 12 hours
-        tmpdir = SCRATCH_DIR           # optional - HPC scratch location
+        tmpdir = SCRATCH_DIR,          # optional - HPC scratch location
+        bbduk_threads = THREADS  # Number of threads for BWA
     params:
         ref = BBDUK_REF
     conda:
@@ -154,7 +155,7 @@ rule trim_adapters:
 
         # Run BBDuk
         bbduk.sh \
-            threads={threads} \
+            threads={resources.bbduk_threads} \
             in={input.r1} in2={input.r2} \
             out={output.trimmed_r1} out2={output.trimmed_r2} \
             ziplevel={ZIPLEVEL} \
