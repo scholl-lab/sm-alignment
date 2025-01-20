@@ -9,7 +9,7 @@
 
 #
 # Usage:
-#   ./submit_trim_adapters.sh [CONFIG_FILE] [MAX_JOBS] [SNAKEMAKE_FILE]
+#   sbatch submit_trim_adapters.sh [CONFIG_FILE] [MAX_JOBS] [SNAKEMAKE_FILE]
 #
 #   - CONFIG_FILE:      Path to a Snakemake config file (default: "config.yaml")
 #   - MAX_JOBS:         Number of Snakemake jobs (in parallel) to use (default: 20)
