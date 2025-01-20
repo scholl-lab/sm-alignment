@@ -9,18 +9,18 @@
 
 #
 # Usage:
-#   sbatch submit_trim_adapters.sh [CONFIG_FILE] [MAX_JOBS] [SNAKEMAKE_FILE]
+#   sbatch submit_trim_adapters.sh [SNAKEMAKE_FILE] [CONFIG_FILE] [MAX_JOBS]
 #
+#   - SNAKEMAKE_FILE:   Path to the Snakemake workflow file (default: "trim_adapters.smk")
 #   - CONFIG_FILE:      Path to a Snakemake config file (default: "config.yaml")
 #   - MAX_JOBS:         Number of Snakemake jobs (in parallel) to use (default: 20)
-#   - SNAKEMAKE_FILE:   Path to the Snakemake workflow file (default: "trim_adapters.smk")
 #
 # ------------------------------------------------------------------------------------
 # Parse command-line arguments with defaults
 # ------------------------------------------------------------------------------------
-CONFIG_FILE=${1:-"config.yaml"}
-MAX_JOBS=${2:-20}
-SNAKEMAKE_FILE=${3:-"trim_adapters.smk"}
+SNAKEMAKE_FILE=${1:-"trim_adapters.smk"}
+CONFIG_FILE=${2:-"config.yaml"}
+MAX_JOBS=${3:-20}
 
 # ------------------------------------------------------------------------------------
 # HPC environment setup
