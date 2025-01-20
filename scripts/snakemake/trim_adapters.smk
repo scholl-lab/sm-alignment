@@ -27,12 +27,20 @@ TBO        = config["params"]["tbo"]
 FTL        = config["params"]["ftl"]
 TRIMPOLYG  = config["params"]["trimpolyg"]
 TRIMPOLYA  = config["params"]["trimpolya"]
+QTRIM      = config["params"]["qtrim"]
+TRIMQ      = config["params"]["trimq"]
+QUANTIZE   = config["params"]["quantize"]
 
 #####################################################################
 # Define output directories
 #####################################################################
 TRIMMED_DIR = os.path.join(PREFIX_RESULTS, TRIMMED_DIR_SUB)
 LOG_DIR     = os.path.join(PREFIX_RESULTS, LOG_DIR_SUB)
+
+#####################################################################
+# Optional: define a scratch directory from environment (Slurm, etc.)
+#####################################################################
+SCRATCH_DIR = os.environ.get("TMPDIR", "/tmp")
 
 #####################################################################
 # Helper functions
@@ -101,6 +109,14 @@ def find_r2(wildcards):
         f"No R2 FASTQ found for sample '{sample}' in directories: {FASTQ_DIRS}"
     )
 
+def get_mem_from_threads(wildcards, threads):
+    """
+    Return an integer representing memory in MB, based on the number of threads.
+    Adjust the multiplier to fit your HPC environment requirements.
+    """
+    # Example: 1000 MB per thread:
+    return threads * 1000
+
 #####################################################################
 # Workflow rules
 #####################################################################
@@ -123,6 +139,10 @@ rule trim_adapters:
         log = os.path.join(LOG_DIR, "bbduk_trim.{sample}.log")
     threads:
         THREADS
+    resources:
+        mem_mb = get_mem_from_threads,  # dynamically compute MB based on threads
+        time = "12:00:00",             # e.g. 12 hours
+        tmpdir = SCRATCH_DIR           # optional - HPC scratch location
     params:
         ref = BBDUK_REF
     conda:
@@ -142,5 +162,7 @@ rule trim_adapters:
             ktrim={KTRIM} k={K} mink={MINK} hdist={HDIST} \
             tpe={TPE} tbo={TBO} \
             ftl={FTL} trimpolyg={TRIMPOLYG} trimpolya={TRIMPOLYA} \
+            qtrim={QTRIM} trimq={TRIMQ} quantize={QUANTIZE} \
             > {log.log} 2>&1
         """
+

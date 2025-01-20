@@ -18,7 +18,7 @@ params:
   fastq_pattern: "*_R1_001.fastq.gz"
 
   # BBDuk reference file
-  bbduk_ref: "adapters"
+  bbduk_ref: "adapters,artifacts"
 
   # Number of threads to use for trimming
   threads: 8
@@ -29,8 +29,11 @@ params:
   k: 23
   mink: 11
   hdist: 1
-  tpe: true
-  tbo: true
+  tpe: "t"
+  tbo: "t"
   ftl: 5
   trimpolyg: 3
   trimpolya: 3
+  qtrim: "t"
+  trimq: 10
+  quantize: "0,10,20,30,40,50,60"
