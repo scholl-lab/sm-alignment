@@ -42,7 +42,7 @@ rule trim_adapters:
         log = os.path.join(LOG_DIR, "bbduk_trim.{sample}.log")
     threads: 8  # Number of threads to use for bbduk
     params:
-        ref = "adapters"  # Reference file for adapters (ensure this file is accessible)
+        ref = "adapters,artifacts"  # Reference file for adapters (ensure this file is accessible)
     conda:
         "base"
     shell:
@@ -55,8 +55,10 @@ rule trim_adapters:
         bbduk.sh threads={threads} \
             in={input.r1} in2={input.r2} \
             out={output.trimmed_r1} out2={output.trimmed_r2} \
+            ziplevel=5 \
             ref={params.ref} \
             ktrim=r k=23 mink=11 hdist=1 tpe tbo \
+            ftr=5 trimpolyg=3 trimpolya=3 \
             > {log.log} 2>&1
         """
 # ----------------------------------------------------------------------------------- #
