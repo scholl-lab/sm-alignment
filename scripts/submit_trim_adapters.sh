@@ -7,28 +7,44 @@
 #SBATCH --mem=2000M
 #SBATCH --output=slurm_logs/%x-%j.log
 
-# Based on:
-# https://hpc-docs.cubi.bihealth.org/best-practice/temp-files/#tmpdir-and-the-scheduler
-# https://bihealth.github.io/bih-cluster/slurm/snakemake/#custom-logging-directory
+#
+# Usage:
+#   ./submit_trim_adapters.sh [CONFIG_FILE] [MAX_JOBS] [SNAKEMAKE_FILE]
+#
+#   - CONFIG_FILE:      Path to a Snakemake config file (default: "config.yaml")
+#   - MAX_JOBS:         Number of Snakemake jobs (in parallel) to use (default: 20)
+#   - SNAKEMAKE_FILE:   Path to the Snakemake workflow file (default: "trim_adapters.smk")
+#
+# ------------------------------------------------------------------------------------
+# Parse command-line arguments with defaults
+# ------------------------------------------------------------------------------------
+CONFIG_FILE=${1:-"config.yaml"}
+MAX_JOBS=${2:-20}
+SNAKEMAKE_FILE=${3:-"trim_adapters.smk"}
 
-# First, point TMPDIR to the scratch in your home as mktemp will use this
+# ------------------------------------------------------------------------------------
+# HPC environment setup
+# ------------------------------------------------------------------------------------
 export TMPDIR=$HOME/scratch/tmp
-# Second, create another unique temporary directory within this directory
 export TMPDIR=$(mktemp -d)
-# Finally, setup the cleanup trap
 trap "rm -rf $TMPDIR" EXIT
 
 # Create the slurm_logs directory if it doesn't exist
 mkdir -p slurm_logs
 
-# Export SBATCH_DEFAULTS for any sbatch commands within the script
+# Export default SBATCH outputs
 export SBATCH_DEFAULTS=" --output=slurm_logs/%x-%j.log"
 
-# Record the start time
 date
 
-# Execute the Snakemake workflow
-srun snakemake -s trim_adapters.smk --use-conda --profile=cubi-v1 -j20
+# ------------------------------------------------------------------------------------
+# Run Snakemake via srun
+# ------------------------------------------------------------------------------------
+srun snakemake \
+    -s "$SNAKEMAKE_FILE" \
+    --use-conda \
+    --profile=cubi-v1 \
+    -j "$MAX_JOBS" \
+    --configfile "$CONFIG_FILE"
 
-# Record the end time
 date

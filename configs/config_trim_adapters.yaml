@@ -1,0 +1,36 @@
+# config.yaml
+
+params:
+  # Base output directory for results
+  prefix_results: "results/exomes"
+
+  # List of directories containing FASTQ files (R1 and R2)
+  fastq_dirs:
+    - "download/exomes/run1"
+    - "download/exomes/run2"
+    - "download/exomes/run3"
+
+  # Subdirectories for trimmed reads and logs (these will be prefixed by prefix_results)
+  trimmed_dir_sub: "bbduk_trimmed"
+  log_dir_sub: "logs"
+
+  # FASTQ pattern for R1 files
+  fastq_pattern: "*_R1_001.fastq.gz"
+
+  # BBDuk reference file
+  bbduk_ref: "adapters"
+
+  # Number of threads to use for trimming
+  threads: 8
+
+  # Additional BBDuk parameters
+  ziplevel: 5
+  ktrim: "r"
+  k: 23
+  mink: 11
+  hdist: 1
+  tpe: true
+  tbo: true
+  ftl: 5
+  trimpolyg: 3
+  trimpolya: 3
