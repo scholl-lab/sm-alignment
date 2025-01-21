@@ -68,24 +68,25 @@ def get_samples():
     """
     Return a list of unique sample names (project_sample) from metadata.
     """
-    samples = set()
-    for md in metadata_dict.values():
-        samples.add(md["project_sample"])
+    samples = set(md["project_sample"] for md in metadata_dict.values())
     samples_list = sorted(samples)
     print(f"DEBUG: Found {len(samples_list)} unique sample(s): {samples_list}")
     return samples_list
 
-# Each rule sets a fixed threads: value, then uses these resource lambdas.
 def get_mem_from_threads(wildcards, threads):
     """Default: 1200 MB per thread."""
     return threads * 1200
 
 def get_bwa_threads(wildcards, threads):
-    """Within an alignment rule, e.g. if threads=16, use 14 for BWA, 2 for sort."""
-    return max(1, threads - 2)
+    """
+    e.g. if threads=9, then use 8 for BWA, 1 for samtools sort,
+    so it doesn't slow down sorting too much.
+    """
+    return max(1, threads - 1)
 
 def get_sort_threads(wildcards, threads):
-    return 2
+    # With threads=9, this returns 1 for samtools sort
+    return 1
 
 def get_sort_mem(wildcards, threads):
     return 2 * 1200
@@ -96,7 +97,7 @@ all_samples = get_samples()
 # 5) Make sure directories exist
 ##############################################################################
 os.makedirs(ALIGNED_FOLDER, exist_ok=True)
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER,  exist_ok=True)
 os.makedirs(FINAL_BAM_FOLDER, exist_ok=True)
 
 LOG_DIR = os.path.join(OUTPUT_FOLDER, LOG_SUBFOLDER)
@@ -113,25 +114,15 @@ rule all:
         [final_bam_path(s) for s in all_samples]
 
 ##############################################################################
-# 7) ALIGNMENT RULE
+# 7) ALIGNMENT RULE (BWA + SAMtools sort)
 ##############################################################################
 def find_r1(basename):
-    """
-    Return e.g.: FASTQ_FOLDER/basename.bbduk_R1_001.fastq.gz
-    """
-    return os.path.join(
-        FASTQ_FOLDER,
-        f"{basename}.bbduk_R1_001.fastq.gz"
-    )
+    """ e.g. FASTQ_FOLDER/basename.bbduk_R1_001.fastq.gz """
+    return os.path.join(FASTQ_FOLDER, f"{basename}.bbduk_R1_001.fastq.gz")
 
 def find_r2(basename):
-    """
-    Return e.g.: FASTQ_FOLDER/basename.bbduk_R2_001.fastq.gz"
-    """
-    return os.path.join(
-        FASTQ_FOLDER,
-        f"{basename}.bbduk_R2_001.fastq.gz"
-    )
+    """ e.g. FASTQ_FOLDER/basename.bbduk_R2_001.fastq.gz """
+    return os.path.join(FASTQ_FOLDER, f"{basename}.bbduk_R2_001.fastq.gz")
 
 rule bwa_map:
     """
@@ -151,7 +142,7 @@ rule bwa_map:
                 mdc_project=metadata_dict[wc.basename]["mdc_project"]
             )
         )
-    threads: 10   # <--- We explicitly request 16 threads for alignment
+    threads: 9
     resources:
         mem_mb       = get_mem_from_threads,
         time         = "24:00:00",
@@ -167,6 +158,12 @@ rule bwa_map:
     shell:
         r"""
         echo "DEBUG: Starting alignment for {wildcards.basename}" >&2
+
+        # Create a unique subfolder for samtools sort temp files:
+        TMP_SORT_DIR=$(mktemp -p {resources.tmpdir} -d samtools-sort.XXXXXX)
+        echo "DEBUG: Created sort tempdir: $TMP_SORT_DIR" >&2
+
+        # Run BWA + pipe to samtools sort
         bwa mem -t {resources.bwa_threads} \
             -R {params.read_group} \
             {params.reference} \
@@ -175,9 +172,14 @@ rule bwa_map:
         | samtools sort -@ {resources.sort_threads} \
             -m {resources.sort_mem}M \
             -O BAM \
-            -T {resources.tmpdir} \
+            -T "$TMP_SORT_DIR"/tmp \
             -o {output.bam_lane} \
             2> {log.samtools}
+
+        # Clean up temporary directory
+        rm -rf "$TMP_SORT_DIR"
+        echo "DEBUG: Removed tmpdir: $TMP_SORT_DIR" >&2
+
         echo "DEBUG: Finished alignment for {wildcards.basename}" >&2
         """
 
@@ -201,7 +203,7 @@ rule merge_bam_files:
         merged_bam = get_merged_bam("{sample}")
     params:
         list_file = os.path.join(OUTPUT_FOLDER, "merged", "{sample}.bamlist")
-    threads: 8   # <--- e.g. 8 threads for merging
+    threads: 8
     resources:
         mem_mb = get_mem_from_threads,  
         time   = "24:00:00",
@@ -215,7 +217,12 @@ rule merge_bam_files:
         echo "DEBUG: Merging BAMs for sample {wildcards.sample}" >&2
         mkdir -p {OUTPUT_FOLDER}/merged
         echo "{input}" | tr " " "\n" > "{params.list_file}"
+
+        # samtools merge does not have -T (tmp) param, but we can still be sure
+        # that it won't clash if multiple merges happen, because there's no separate
+        # sorting step. We just run samtools merge directly:
         samtools merge -@ {threads} -O BAM -b "{params.list_file}" "{output.merged_bam}" 2> {log.merge}
+
         rm "{params.list_file}"
         echo "DEBUG: Finished merging for {wildcards.sample}" >&2
         """
@@ -234,7 +241,7 @@ rule deduplicate_bam_files:
     output:
         dedup_bam = get_dedup_bam("{sample}"),
         metrics   = os.path.join(OUTPUT_FOLDER, "dedup", "{sample}.merged.dedup_metrics.txt")
-    threads: 4   # <--- e.g. 4 threads for MarkDuplicates
+    threads: 4
     resources:
         mem_mb = lambda wildcards, threads: threads * 4400,
         time   = "72:00:00",
@@ -273,7 +280,7 @@ rule base_recalibration:
         dedup_bam = get_dedup_bam("{sample}")
     output:
         recal_table = get_recal_table("{sample}")
-    threads: 4   # <--- e.g. 4 threads for BaseRecalibrator
+    threads: 4
     resources:
         mem_mb = lambda wildcards, threads: threads * 4400,
         time   = "72:00:00",
@@ -302,7 +309,7 @@ rule apply_bqsr:
         recal_table  = get_recal_table("{sample}")
     output:
         bqsr_bam     = get_bqsr_bam("{sample}")
-    threads: 4   # <--- e.g. 4 threads for ApplyBQSR
+    threads: 4
     resources:
         mem_mb = lambda wildcards, threads: threads * 4400,
         time   = "72:00:00",
