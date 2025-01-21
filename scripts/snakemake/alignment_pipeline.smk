@@ -170,7 +170,6 @@ rule bwa_map:
             {input[0]} {input[1]} \
             2> {log.bwa} \
         | samtools sort -@ {resources.sort_threads} \
-            --write-index \
             -m {resources.sort_mem}M \
             -O BAM \
             -T "$TMP_SORT_DIR"/tmp \
@@ -219,7 +218,7 @@ rule merge_bam_files:
         mkdir -p {OUTPUT_FOLDER}/merged
         echo "{input}" | tr " " "\n" > "{params.list_file}"
 
-        samtools merge -@ {threads} --write-index -O BAM -b "{params.list_file}" "{output.merged_bam}" 2> {log.merge}
+        samtools merge -@ {threads} -O BAM -b "{params.list_file}" "{output.merged_bam}" 2> {log.merge}
 
         rm "{params.list_file}"
         echo "DEBUG: Finished merging for {wildcards.sample}" >&2
