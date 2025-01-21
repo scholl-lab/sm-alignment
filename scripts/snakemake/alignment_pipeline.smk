@@ -1,0 +1,344 @@
+#####################################################################
+# alignment_pipeline.smk
+#####################################################################
+import os
+import glob
+import csv
+import yaml
+
+##############################################################################
+# 1) Load the config file
+##############################################################################
+configfile: "config.yaml"
+
+# We'll assume your config has top-level keys:
+#   fastq_folder
+#   aligned_folder
+#   output_folder
+#   final_bam_folder
+#   reference
+#   reference_unpacked
+#   panel_of_normals
+#   af_only_gnomad
+#   common_biallelic_gnomad
+#   reference_version
+#   mutect_scatter_by_chromosome
+#   final_bam_file_extension
+#   log_dir_sub
+
+FASTQ_FOLDER            = config["fastq_folder"]
+ALIGNED_FOLDER          = config["aligned_folder"]
+OUTPUT_FOLDER           = config["output_folder"]
+FINAL_BAM_FOLDER        = config["final_bam_folder"]
+REFERENCE               = config["reference"]
+REFERENCE_UNPACKED      = config["reference_unpacked"]
+PANEL_OF_NORMALS        = config["panel_of_normals"]
+AF_ONLY_GNOMAD          = config["af_only_gnomad"]
+COMMON_BIALLELIC_GNOMAD = config["common_biallelic_gnomad"]
+REFERENCE_VERSION       = config["reference_version"]
+FINAL_BAM_EXTENSION     = config["final_bam_file_extension"]
+LOG_SUBFOLDER           = config["log_dir_sub"]
+
+##############################################################################
+# 2) Optional environment-based scratch directory (e.g. for cluster jobs)
+##############################################################################
+SCRATCH_DIR = os.environ.get("TMPDIR", "/tmp")
+
+##############################################################################
+# 3) Read the metadata (metadata.tsv)
+##############################################################################
+# We assume your metadata.tsv has columns:
+#   fastq_files_basename, subfolder, mdc_project, project_sample, sample_sheet_number, lane
+
+metadata_dict = {}
+METADATA_FILE = config["metadata_file"]  # Changed here to use config
+
+def load_metadata():
+    print(f"DEBUG: Loading metadata from {METADATA_FILE}")
+    with open(METADATA_FILE, "r") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        for row in reader:
+            basename = row["fastq_files_basename"]
+            metadata_dict[basename] = row
+
+load_metadata()
+print(f"DEBUG: Number of entries in metadata: {len(metadata_dict)}")
+
+##############################################################################
+# 4) Define helper functions for sample-lists and resource usage
+##############################################################################
+def get_samples():
+    """
+    Return a list of unique sample names (project_sample) from metadata.
+    """
+    samples = set()
+    for md in metadata_dict.values():
+        samples.add(md["project_sample"])
+    samples_list = sorted(list(samples))
+    print(f"DEBUG: Found {len(samples_list)} unique sample(s): {samples_list}")
+    return samples_list
+
+def get_mem_from_threads(wildcards, threads):
+    """
+    Return memory in MB based on # threads (e.g. 1200 MB/thread).
+    Adjust as needed for your HPC environment.
+    """
+    return threads * 1200
+
+def get_bwa_threads(wildcards, threads):
+    """
+    Example: If we have 16 threads total, let 14 be for BWA, 2 for sorting, etc.
+    """
+    return max(1, threads - 2)
+
+def get_sort_threads(wildcards, threads):
+    """
+    Samtools sort might use 2 threads while the rest are used by BWA.
+    """
+    return 2
+
+def get_sort_mem(wildcards, threads):
+    """
+    Memory for samtools sort, e.g., 1200 MB per thread x 2 threads = 2400 MB
+    """
+    return 2 * 1200
+
+all_samples = get_samples()
+
+##############################################################################
+# 5) Make sure directories exist or will be created
+##############################################################################
+os.makedirs(ALIGNED_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER,  exist_ok=True)
+os.makedirs(FINAL_BAM_FOLDER, exist_ok=True)
+
+LOG_DIR = os.path.join(OUTPUT_FOLDER, LOG_SUBFOLDER)
+os.makedirs(LOG_DIR, exist_ok=True)
+
+##############################################################################
+# 6) Build a list of final outputs (the BQSR BAMs for each sample)
+##############################################################################
+# We'll produce e.g. "results/exomes/bqsr/<sample>.merged.dedup.bqsr.bam"
+def final_bam_path(sample):
+    return os.path.join(FINAL_BAM_FOLDER, f"{sample}{FINAL_BAM_EXTENSION}")
+
+rule all:
+    input:
+        [final_bam_path(s) for s in all_samples]
+
+##############################################################################
+# 7) RULE: ALIGNMENT (one .bam per lane in ALIGNED_FOLDER)
+##############################################################################
+def find_r1(basename, subfolder):
+    """
+    Return the path to R1 for a given metadata row.
+    e.g. FASTQ_FOLDER/run1/P1861_APA23_T_S_S41_L006_R1_001.fastq.gz
+    """
+    return os.path.join(
+        FASTQ_FOLDER,
+        subfolder,
+        f"{basename}_R1_001.fastq.gz"
+    )
+
+def find_r2(basename, subfolder):
+    """
+    Return the path to R2 for a given metadata row.
+    """
+    return os.path.join(
+        FASTQ_FOLDER,
+        subfolder,
+        f"{basename}_R2_001.fastq.gz"
+    )
+
+rule bwa_map:
+    input:
+        # Use a single lambda returning a list of two files (R1, R2)
+        lambda wildcards: [
+            find_r1(wildcards.basename, wildcards.subfolder),
+            find_r2(wildcards.basename, wildcards.subfolder)
+        ]
+    output:
+        bam_lane = os.path.join(ALIGNED_FOLDER, "{basename}_{subfolder}.bam")
+    params:
+        reference = REFERENCE,
+        read_group = lambda wildcards: (
+            "\"@RG\\tID:{lane}-{sample}\\tSM:{sample}\\tLB:{sample}\\tPL:ILLUMINA\\tPU:{lane}-{mdc_project}\""
+            .format(
+                lane=metadata_dict[wildcards.basename]["lane"],
+                sample=metadata_dict[wildcards.basename]["project_sample"],
+                mdc_project=metadata_dict[wildcards.basename]["mdc_project"]
+            )
+        )
+    threads: 16
+    resources:
+        mem_mb       = get_mem_from_threads,
+        time         = "24:00:00",
+        tmpdir       = SCRATCH_DIR,
+        bwa_threads  = get_bwa_threads,
+        sort_threads = get_sort_threads,
+        sort_mem     = get_sort_mem
+    log:
+        bwa      = os.path.join(LOG_DIR, "map.bwa.{basename}_{subfolder}.log"),
+        samtools = os.path.join(LOG_DIR, "map.samtools.{basename}_{subfolder}.log")
+    shell:
+        r"""
+        echo "DEBUG: Starting alignment for {wildcards.basename} in subfolder {wildcards.subfolder}" >&2
+        bwa mem -t {resources.bwa_threads} \
+            -R {params.read_group} \
+            {params.reference} \
+            {input[0]} {input[1]} \
+            2> {log.bwa} \
+        | samtools sort -@ {resources.sort_threads} \
+            -m {resources.sort_mem}M \
+            -O BAM \
+            -T {resources.tmpdir} \
+            -o {output.bam_lane} \
+            2> {log.samtools}
+        echo "DEBUG: Finished alignment for {wildcards.basename}" >&2
+        """
+
+##############################################################################
+# 8) RULE: MERGE (samtools merge all lanes for a given sample)
+##############################################################################
+def get_merged_bam(sample):
+    return os.path.join(OUTPUT_FOLDER, "merged", f"{sample}.merged.bam")
+
+rule merge_bam_files:
+    """
+    Merge all lane-level BAMs that correspond to the same 'project_sample'.
+    """
+    input:
+        lambda wildcards: [
+            os.path.join(ALIGNED_FOLDER, f"{basename}_{metadata_dict[basename]['subfolder']}.bam")
+            for basename in metadata_dict
+            if metadata_dict[basename]["project_sample"] == wildcards.sample
+        ]
+    output:
+        merged_bam = get_merged_bam("{sample}")
+    params:
+        list_file = os.path.join(OUTPUT_FOLDER, "merged", "{sample}.bamlist")
+    threads: 8
+    resources:
+        mem_mb = get_mem_from_threads,
+        time   = "24:00:00",
+        tmpdir = SCRATCH_DIR
+    log:
+        merge = os.path.join(LOG_DIR, "merge.samtools.{sample}.log")
+    shell:
+        r"""
+        echo "DEBUG: Merging BAMs for sample {wildcards.sample}" >&2
+        mkdir -p {OUTPUT_FOLDER}/merged
+        echo "{input}" | tr " " "\n" > "{params.list_file}"
+        samtools merge -@ {threads} -O BAM -b "{params.list_file}" "{output.merged_bam}" 2> {log.merge}
+        rm "{params.list_file}"
+        echo "DEBUG: Finished merging for {wildcards.sample}" >&2
+        """
+
+##############################################################################
+# 9) RULE: DEDUPLICATION (GATK MarkDuplicates)
+##############################################################################
+def get_dedup_bam(sample):
+    dedup_dir = os.path.join(OUTPUT_FOLDER, "dedup")
+    os.makedirs(dedup_dir, exist_ok=True)
+    return os.path.join(dedup_dir, f"{sample}.merged.dedup.bam")
+
+rule deduplicate_bam_files:
+    input:
+        merged_bam = get_merged_bam("{sample}")
+    output:
+        dedup_bam = get_dedup_bam("{sample}"),
+        metrics   = os.path.join(OUTPUT_FOLDER, "dedup", "{sample}.merged.dedup_metrics.txt")
+    threads: 4
+    resources:
+        mem_mb = lambda wc, t: t * 4400,
+        time   = "72:00:00",
+        tmpdir = SCRATCH_DIR
+    conda:
+        "gatk"
+    log:
+        dedup = os.path.join(LOG_DIR, "dedup.gatk.{sample}.log")
+    shell:
+        r"""
+        echo "DEBUG: MarkDuplicates for sample {wildcards.sample}" >&2
+        gatk --java-options "-Xms4000m -Xmx7g -Djava.io.tmpdir={resources.tmpdir}" MarkDuplicates \
+            -I "{input.merged_bam}" \
+            -O "{output.dedup_bam}" \
+            -M "{output.metrics}" \
+            --CREATE_INDEX true \
+            --VALIDATION_STRINGENCY SILENT \
+            2> {log.dedup}
+        echo "DEBUG: Finished dedup for {wildcards.sample}" >&2
+        """
+
+##############################################################################
+# 10) RULE: BQSR (BaseRecalibrator & ApplyBQSR)
+##############################################################################
+def get_recal_table(sample):
+    bqsr_dir = os.path.join(OUTPUT_FOLDER, "bqsr")
+    os.makedirs(bqsr_dir, exist_ok=True)
+    return os.path.join(bqsr_dir, f"{sample}.merged.dedup.recal_data.table")
+
+def get_bqsr_bam(sample):
+    bqsr_dir = os.path.join(OUTPUT_FOLDER, "bqsr")
+    return os.path.join(bqsr_dir, f"{sample}.merged.dedup.bqsr.bam")
+
+rule base_recalibration:
+    input:
+        dedup_bam = get_dedup_bam("{sample}")
+    output:
+        recal_table = get_recal_table("{sample}")
+    threads: 4
+    resources:
+        mem_mb = lambda wc, t: t * 4400,
+        time   = "72:00:00",
+        tmpdir = SCRATCH_DIR
+    conda:
+        "gatk"
+    log:
+        recal = os.path.join(LOG_DIR, "recal.gatk.{sample}.log")
+    shell:
+        r"""
+        echo "DEBUG: BaseRecalibrator for sample {wildcards.sample}" >&2
+        gatk --java-options "-Xms4000m -Xmx7g -Djava.io.tmpdir={resources.tmpdir}" BaseRecalibrator \
+            -I "{input.dedup_bam}" \
+            -R "{REFERENCE_UNPACKED}" \
+            --known-sites "{AF_ONLY_GNOMAD}" \
+            --known-sites "{COMMON_BIALLELIC_GNOMAD}" \
+            --known-sites "{PANEL_OF_NORMALS}" \
+            -O "{output.recal_table}" \
+            2> {log.recal}
+        echo "DEBUG: Finished BaseRecalibrator for sample {wildcards.sample}" >&2
+        """
+
+rule apply_bqsr:
+    input:
+        dedup_bam    = get_dedup_bam("{sample}"),
+        recal_table  = get_recal_table("{sample}")
+    output:
+        bqsr_bam     = get_bqsr_bam("{sample}")
+    threads: 4
+    resources:
+        mem_mb = lambda wc, t: t * 4400,
+        time   = "72:00:00",
+        tmpdir = SCRATCH_DIR
+    conda:
+        "gatk"
+    log:
+        apply_bqsr = os.path.join(LOG_DIR, "apply_bqsr.gatk.{sample}.log")
+    shell:
+        r"""
+        echo "DEBUG: ApplyBQSR for sample {wildcards.sample}" >&2
+        gatk --java-options "-Xms4000m -Xmx7g -Djava.io.tmpdir={resources.tmpdir} -Dsamjdk.compression_level=6" \
+            ApplyBQSR \
+            -I "{input.dedup_bam}" \
+            -bqsr "{input.recal_table}" \
+            -O "{output.bqsr_bam}" \
+            2> {log.apply_bqsr}
+        echo "DEBUG: Finished ApplyBQSR for sample {wildcards.sample}" >&2
+        """
+
+##############################################################################
+# 11) Now the final BQSR’d BAM for each sample is at:
+#    e.g., "results/exomes/bqsr/<sample>.merged.dedup.bqsr.bam"
+# That is what rule 'all' collects at the top of the file.
+##############################################################################
