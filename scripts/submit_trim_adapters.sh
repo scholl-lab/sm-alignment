@@ -3,7 +3,7 @@
 #SBATCH --job-name=sm_trim_adapters_main_job
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --time=168:00:00
+#SBATCH --time=72:00:00
 #SBATCH --mem=2000M
 #SBATCH --output=slurm_logs/%x-%j.log
 

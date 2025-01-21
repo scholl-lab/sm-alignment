@@ -3,7 +3,7 @@
 #SBATCH --job-name=sm_alignment_main_job
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --time=168:00:00
+#SBATCH --time=72:00:00
 #SBATCH --mem=2000M
 #SBATCH --output=slurm_logs/%x-%j.log
 
@@ -32,6 +32,9 @@ trap "rm -rf $TMPDIR" EXIT
 
 # Create the slurm_logs directory if it doesn't exist
 mkdir -p slurm_logs
+
+# Export default SBATCH outputs
+export SBATCH_DEFAULTS=" --output=slurm_logs/%x-%j.log"
 
 echo "DEBUG: Running Snakemake pipeline with:"
 echo "       Snakefile:    $SNAKEMAKE_FILE"
