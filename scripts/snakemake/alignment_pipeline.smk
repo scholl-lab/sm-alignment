@@ -75,12 +75,13 @@ def get_samples():
     print(f"DEBUG: Found {len(samples_list)} unique sample(s): {samples_list}")
     return samples_list
 
-# Updated resource lambdas to accept (wildcards, threads), matching Snakemake’s expectations
+# Each rule sets a fixed threads: value, then uses these resource lambdas.
 def get_mem_from_threads(wildcards, threads):
+    """Default: 1200 MB per thread."""
     return threads * 1200
 
 def get_bwa_threads(wildcards, threads):
-    # e.g. 16 total => 14 for BWA, 2 for sorting
+    """Within an alignment rule, e.g. if threads=16, use 14 for BWA, 2 for sort."""
     return max(1, threads - 2)
 
 def get_sort_threads(wildcards, threads):
@@ -114,10 +115,6 @@ rule all:
 ##############################################################################
 # 7) ALIGNMENT RULE
 ##############################################################################
-# We remove "subfolder" from the wildcards and from the path,
-# because your trimmed FASTQs are all in FASTQ_FOLDER with
-# names like "basename.bbduk_R1_001.fastq.gz".
-
 def find_r1(basename):
     """
     Return e.g.: FASTQ_FOLDER/basename.bbduk_R1_001.fastq.gz
@@ -137,7 +134,9 @@ def find_r2(basename):
     )
 
 rule bwa_map:
-    # We'll align per 'basename' (lane-level).
+    """
+    Align per 'basename' -> produce ALIGNED_FOLDER/{basename}.bam
+    """
     input:
         lambda wc: [find_r1(wc.basename), find_r2(wc.basename)]
     output:
@@ -152,7 +151,7 @@ rule bwa_map:
                 mdc_project=metadata_dict[wc.basename]["mdc_project"]
             )
         )
-    threads: 16
+    threads: 10   # <--- We explicitly request 16 threads for alignment
     resources:
         mem_mb       = get_mem_from_threads,
         time         = "24:00:00",
@@ -160,6 +159,8 @@ rule bwa_map:
         bwa_threads  = get_bwa_threads,
         sort_threads = get_sort_threads,
         sort_mem     = get_sort_mem
+    conda:
+        "base"
     log:
         bwa      = os.path.join(LOG_DIR, "map.bwa.{basename}.log"),
         samtools = os.path.join(LOG_DIR, "map.samtools.{basename}.log")
@@ -200,11 +201,13 @@ rule merge_bam_files:
         merged_bam = get_merged_bam("{sample}")
     params:
         list_file = os.path.join(OUTPUT_FOLDER, "merged", "{sample}.bamlist")
-    threads: 8
+    threads: 8   # <--- e.g. 8 threads for merging
     resources:
-        mem_mb = get_mem_from_threads,  # also updated to match signature
+        mem_mb = get_mem_from_threads,  
         time   = "24:00:00",
         tmpdir = SCRATCH_DIR
+    conda:
+        "base"
     log:
         merge = os.path.join(LOG_DIR, "merge.samtools.{sample}.log")
     shell:
@@ -231,7 +234,7 @@ rule deduplicate_bam_files:
     output:
         dedup_bam = get_dedup_bam("{sample}"),
         metrics   = os.path.join(OUTPUT_FOLDER, "dedup", "{sample}.merged.dedup_metrics.txt")
-    threads: 4
+    threads: 4   # <--- e.g. 4 threads for MarkDuplicates
     resources:
         mem_mb = lambda wildcards, threads: threads * 4400,
         time   = "72:00:00",
@@ -270,7 +273,7 @@ rule base_recalibration:
         dedup_bam = get_dedup_bam("{sample}")
     output:
         recal_table = get_recal_table("{sample}")
-    threads: 4
+    threads: 4   # <--- e.g. 4 threads for BaseRecalibrator
     resources:
         mem_mb = lambda wildcards, threads: threads * 4400,
         time   = "72:00:00",
@@ -299,7 +302,7 @@ rule apply_bqsr:
         recal_table  = get_recal_table("{sample}")
     output:
         bqsr_bam     = get_bqsr_bam("{sample}")
-    threads: 4
+    threads: 4   # <--- e.g. 4 threads for ApplyBQSR
     resources:
         mem_mb = lambda wildcards, threads: threads * 4400,
         time   = "72:00:00",
