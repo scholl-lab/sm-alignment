@@ -79,17 +79,16 @@ def get_mem_from_threads(wildcards, threads):
 
 def get_bwa_threads(wildcards, threads):
     """
-    e.g. if threads=9, then use 8 for BWA, 1 for samtools sort,
+    e.g. if threads=10, then use 8 for BWA, 2 for samtools sort,
     so it doesn't slow down sorting too much.
     """
-    return max(1, threads - 1)
+    return max(1, threads - 2)
 
 def get_sort_threads(wildcards, threads):
-    # With threads=9, this returns 1 for samtools sort
-    return 1
+    return 2
 
 def get_sort_mem(wildcards, threads):
-    return 2 * 1200
+    return 2 * 2000
 
 all_samples = get_samples()
 
@@ -97,7 +96,7 @@ all_samples = get_samples()
 # 5) Make sure directories exist
 ##############################################################################
 os.makedirs(ALIGNED_FOLDER, exist_ok=True)
-os.makedirs(OUTPUT_FOLDER,  exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 os.makedirs(FINAL_BAM_FOLDER, exist_ok=True)
 
 LOG_DIR = os.path.join(OUTPUT_FOLDER, LOG_SUBFOLDER)
@@ -131,7 +130,8 @@ rule bwa_map:
     input:
         lambda wc: [find_r1(wc.basename), find_r2(wc.basename)]
     output:
-        bam_lane = os.path.join(ALIGNED_FOLDER, "{basename}.bam")
+        # Mark the lane-level BAM as temporary
+        bam_lane = temp(os.path.join(ALIGNED_FOLDER, "{basename}.bam"))
     params:
         reference = REFERENCE,
         read_group = lambda wc: (
@@ -142,7 +142,7 @@ rule bwa_map:
                 mdc_project=metadata_dict[wc.basename]["mdc_project"]
             )
         )
-    threads: 9
+    threads: 16
     resources:
         mem_mb       = get_mem_from_threads,
         time         = "24:00:00",
@@ -200,7 +200,8 @@ rule merge_bam_files:
             if metadata_dict[basename]["project_sample"] == wc.sample
         ]
     output:
-        merged_bam = get_merged_bam("{sample}")
+        # Mark the merged BAM as temporary
+        merged_bam = temp(get_merged_bam("{sample}"))
     params:
         list_file = os.path.join(OUTPUT_FOLDER, "merged", "{sample}.bamlist")
     threads: 8
@@ -236,7 +237,8 @@ rule deduplicate_bam_files:
     input:
         merged_bam = get_merged_bam("{sample}")
     output:
-        dedup_bam = get_dedup_bam("{sample}"),
+        # Mark the deduplicated BAM as temporary
+        dedup_bam = temp(get_dedup_bam("{sample}")),
         metrics   = os.path.join(OUTPUT_FOLDER, "dedup", "{sample}.merged.dedup_metrics.txt")
     threads: 4
     resources:
@@ -305,7 +307,7 @@ rule apply_bqsr:
         dedup_bam    = get_dedup_bam("{sample}"),
         recal_table  = get_recal_table("{sample}")
     output:
-        bqsr_bam     = get_bqsr_bam("{sample}")
+        bqsr_bam     = os.path.join(OUTPUT_FOLDER, "bqsr", "{sample}.merged.dedup.bqsr.bam")
     threads: 4
     resources:
         mem_mb = lambda wildcards, threads: threads * 4400,
