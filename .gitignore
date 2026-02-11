@@ -163,6 +163,9 @@ cython_debug/
 # Test output
 tests/data/output/
 
+# Windows NUL device artifact
+nul
+
 # Claude Code
 CLAUDE.md
 .claude/
