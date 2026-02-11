@@ -1,0 +1,17 @@
+# =============================================================================
+# Charité HPC cluster profile
+# =============================================================================
+# Loaded via --profile profiles/charite (auto-detected by run_snakemake.sh).
+#
+# The Charité cluster has no system-wide Snakemake profile, so we provide
+# the SLURM submission command here. On BIH HPC, cubi-v1 serves this role.
+#
+# Key Charité constraints:
+#   - Max walltime: 2 days (2-00:00:00)
+#   - Frontend memory limit: 1 GB (run coordinator as SLURM job)
+#   - Conda requires: source /etc/profile.d/conda.sh
+# =============================================================================
+
+cluster: "sbatch --parsable --partition=compute --time={resources.runtime} --mem={resources.mem_mb}M --cpus-per-task={threads} --output=slurm_logs/slurm-%j.log"
+jobs: 50
+latency-wait: 60

@@ -7,9 +7,9 @@ rule deduplicate_bam_files:
         metrics=os.path.join(DEDUP_DIR, "{sample}" + DEDUP_METRICS_SUFFIX),
     params:
         java_opts=get_java_opts,
-        extra=config.get("params", {}).get("gatk", {}).get(
-            "MarkDuplicates", "--CREATE_INDEX true --VALIDATION_STRINGENCY SILENT"
-        ),
+        extra=config.get("params", {})
+        .get("gatk", {})
+        .get("MarkDuplicates", "--CREATE_INDEX true --VALIDATION_STRINGENCY SILENT"),
     threads: 4
     resources:
         runtime=4320,

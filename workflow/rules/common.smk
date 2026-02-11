@@ -29,8 +29,12 @@ TRIMMED_DIR = os.path.join(OUTPUT_DIR, "bbduk_trimmed")
 
 MERGED_SUFFIX = config.get("bam", {}).get("merged_suffix", ".merged.bam")
 DEDUP_SUFFIX = config.get("bam", {}).get("dedup_suffix", ".merged.dedup.bam")
-DEDUP_METRICS_SUFFIX = config.get("bam", {}).get("dedup_metrics_suffix", ".merged.dedup_metrics.txt")
-RECAL_TABLE_SUFFIX = config.get("bam", {}).get("recal_table_suffix", ".merged.dedup.recal_data.table")
+DEDUP_METRICS_SUFFIX = config.get("bam", {}).get(
+    "dedup_metrics_suffix", ".merged.dedup_metrics.txt"
+)
+RECAL_TABLE_SUFFIX = config.get("bam", {}).get(
+    "recal_table_suffix", ".merged.dedup.recal_data.table"
+)
 FINAL_BAM_SUFFIX = config.get("bam", {}).get("final_suffix", ".merged.dedup.bqsr.bam")
 
 COMPRESSION_LEVEL = config.get("processing", {}).get("compression_level", 6)
@@ -56,9 +60,7 @@ def get_samples():
 
 def get_basenames_for_sample(sample):
     """Return all FASTQ basenames belonging to a given sample."""
-    return samples_df.loc[
-        samples_df["project_sample"] == sample, "fastq_files_basename"
-    ].tolist()
+    return samples_df.loc[samples_df["project_sample"] == sample, "fastq_files_basename"].tolist()
 
 
 def _resolve_fastq_path(wildcards, suffix):

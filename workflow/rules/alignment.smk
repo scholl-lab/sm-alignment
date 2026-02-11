@@ -9,8 +9,7 @@ rule bwa_map:
         reference=REF_GZ,
         read_group=lambda wc: (
             '"@RG\\tID:{lane}-{sample}\\tSM:{sample}\\tLB:{sample}'
-            "\\tPL:{platform}\\tPU:{lane}-{project}\""
-            .format(
+            '\\tPL:{platform}\\tPU:{lane}-{project}"'.format(
                 lane=samples_df.loc[wc.basename, "lane"],
                 sample=samples_df.loc[wc.basename, "project_sample"],
                 project=samples_df.loc[wc.basename, "mdc_project"],

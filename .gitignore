@@ -138,8 +138,9 @@ venv.bak/
 # mkdocs documentation
 /site
 
-# mypy
+# Linting caches
 .mypy_cache/
+.ruff_cache/
 .dmypy.json
 dmypy.json
 

@@ -44,13 +44,13 @@ set-resources:
     runtime: 1440
   deduplicate_bam_files:
     mem_mb: 17600
-    runtime: 4320
+    runtime: 2880
   base_recalibration:
     mem_mb: 17600
-    runtime: 4320
+    runtime: 2880
   apply_bqsr:
     mem_mb: 17600
-    runtime: 4320
+    runtime: 2880
   trim_adapters:
     mem_mb: 4000
     runtime: 720

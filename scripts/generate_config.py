@@ -8,7 +8,12 @@ Supports two SampleSheet formats:
   1. BIH/Charite minimal (bare CSV rows, no section headers)
   2. Standard Illumina with [Header]/[Data] sections
 
+Two modes:
+  Interactive:  python scripts/generate_config.py          (guided wizard)
+  Flags:        python scripts/generate_config.py --fastq-dir /path/to/fastqs
+
 Usage:
+    python scripts/generate_config.py
     python scripts/generate_config.py --fastq-dir /path/to/fastqs
     python scripts/generate_config.py --fastq-dir /path/to/fastqs --samplesheet SampleSheet.csv
     python scripts/generate_config.py --fastq-dir /path/to/fastqs --config-template --dry-run
@@ -18,11 +23,10 @@ from __future__ import annotations
 
 import argparse
 import csv
-import os
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any
 
 try:
     import pandas as pd
@@ -49,15 +53,76 @@ PROJECT_ID_RE = re.compile(r"(A\d{4,})")
 INDEX_RE = re.compile(r"^[ACGTNacgtn]+$")
 
 # Known section headers in Illumina SampleSheet v2
-SECTION_HEADERS = {"[Data]", "[BCLConvert_Data]", "[BCLConvert_Settings]", "[Header]",
-                   "[Reads]", "[Settings]"}
+SECTION_HEADERS = {
+    "[Data]",
+    "[BCLConvert_Data]",
+    "[BCLConvert_Settings]",
+    "[Header]",
+    "[Reads]",
+    "[Settings]",
+}
+
+# Reference genome file extensions
+GENOME_EXTENSIONS = ("*.fna", "*.fa", "*.fasta")
+
+# BWA index companion extensions (classic and bwtsw/64-bit)
+BWA_INDEX_EXTS = (
+    ".amb",
+    ".ann",
+    ".bwt",
+    ".pac",
+    ".sa",
+    ".64.amb",
+    ".64.ann",
+    ".64.bwt",
+    ".64.pac",
+    ".64.sa",
+)
+
+# Known-sites VCF patterns (GATK resource bundle)
+KNOWN_SITES_PATTERNS = (
+    "*dbsnp*.vcf*",
+    "*known_indels*.vcf*",
+    "*Mills_and_1000G*.vcf*",
+    "*af-only-gnomad*.vcf.gz",
+    "*1000g_pon*.vcf.gz",
+)
+
+# Standard search directories for reference data (relative to project root)
+REF_SEARCH_DIRS = [
+    "resources/ref",
+    "resources/ref/GRCh38",
+    "analysis/ref/GRCh38",
+    "../resources/ref/GRCh38",
+    "../resources/ref",
+]
+
+# Known-sites search directories
+KNOWN_SITES_SEARCH_DIRS = [
+    "resources/gatk_bundle/hg38",
+    "resources/gatk_bundle",
+    "analysis/GATK_resource_bundle",
+    "../resources/gatk_bundle/hg38",
+    "../resources/gatk_bundle",
+]
+
+# Well-known shared locations on BIH and Charité HPC
+SHARED_REF_DIRS = [
+    "/data/cephfs-1/work/groups/scholl/shared/ref/GRCh38",
+    "/data/cephfs-1/work/groups/scholl/shared/ref",
+]
+
+SHARED_KNOWN_SITES_DIRS = [
+    "/data/cephfs-1/work/projects/apa-sequencing/analysis/GATK_resource_bundle",
+]
 
 
 # ---------------------------------------------------------------------------
 # SampleSheet parsing
 # ---------------------------------------------------------------------------
 
-def detect_samplesheet_format(lines: List[str]) -> str:
+
+def detect_samplesheet_format(lines: list[str]) -> str:
     """Detect whether a SampleSheet uses Illumina sections or minimal format.
 
     Args:
@@ -73,7 +138,7 @@ def detect_samplesheet_format(lines: List[str]) -> str:
     return "minimal"
 
 
-def parse_illumina_samplesheet(lines: List[str]) -> List[Dict[str, str]]:
+def parse_illumina_samplesheet(lines: list[str]) -> list[dict[str, str]]:
     """Parse a standard Illumina SampleSheet with [Header]/[Data] sections.
 
     Skips everything until [Data] or [BCLConvert_Data] section is found,
@@ -94,15 +159,16 @@ def parse_illumina_samplesheet(lines: List[str]) -> List[Dict[str, str]]:
             break
 
     if data_start is None:
-        print("Warning: No [Data] or [BCLConvert_Data] section found in SampleSheet.",
-              file=sys.stderr)
+        print(
+            "Warning: No [Data] or [BCLConvert_Data] section found in SampleSheet.",
+            file=sys.stderr,
+        )
         return []
 
     # Read the header row
     if data_start >= len(lines):
         return []
 
-    header_line = lines[data_start].strip()
     reader = csv.DictReader(lines[data_start:])
 
     # Normalize column names: Illumina uses varying capitalization
@@ -131,18 +197,20 @@ def parse_illumina_samplesheet(lines: List[str]) -> List[Dict[str, str]]:
         # Use Sample_Name if available, fall back to Sample_ID
         sample_name = normalized.get("sample_name", "") or normalized.get("sample_id", "")
 
-        samples.append({
-            "lane": normalized.get("lane", ""),
-            "sample_name": sample_name,
-            "index_i7": normalized.get("index_i7", ""),
-            "index_i5": normalized.get("index_i5", ""),
-            "sample_project": normalized.get("sample_project", ""),
-        })
+        samples.append(
+            {
+                "lane": normalized.get("lane", ""),
+                "sample_name": sample_name,
+                "index_i7": normalized.get("index_i7", ""),
+                "index_i5": normalized.get("index_i5", ""),
+                "sample_project": normalized.get("sample_project", ""),
+            }
+        )
 
     return samples
 
 
-def parse_minimal_samplesheet(lines: List[str]) -> List[Dict[str, str]]:
+def parse_minimal_samplesheet(lines: list[str]) -> list[dict[str, str]]:
     """Parse a BIH/Charite minimal SampleSheet (bare CSV, no section headers).
 
     Expected columns (positional): Lane, Sample_Name, index_i7, index_i5, Sample_Project
@@ -202,20 +270,25 @@ def parse_minimal_samplesheet(lines: List[str]) -> List[Dict[str, str]]:
                 index_i5 = fields[3]
 
         if lane_val is not None and sample_name is not None:
-            samples.append({
-                "lane": lane_val,
-                "sample_name": sample_name,
-                "index_i7": index_i7 or "",
-                "index_i5": index_i5 or "",
-                "sample_project": project,
-            })
+            samples.append(
+                {
+                    "lane": lane_val,
+                    "sample_name": sample_name,
+                    "index_i7": index_i7 or "",
+                    "index_i5": index_i5 or "",
+                    "sample_project": project,
+                }
+            )
         else:
-            print(f"Warning: Could not parse SampleSheet line: {stripped}", file=sys.stderr)
+            print(
+                f"Warning: Could not parse SampleSheet line: {stripped}",
+                file=sys.stderr,
+            )
 
     return samples
 
 
-def parse_samplesheet(path: Path) -> List[Dict[str, str]]:
+def parse_samplesheet(path: Path) -> list[dict[str, str]]:
     """Parse a SampleSheet.csv file, auto-detecting the format.
 
     Args:
@@ -224,7 +297,7 @@ def parse_samplesheet(path: Path) -> List[Dict[str, str]]:
     Returns:
         List of dicts with keys: lane, sample_name, index_i7, index_i5, sample_project.
     """
-    with open(path, "r", encoding="utf-8-sig") as fh:
+    with open(path, encoding="utf-8-sig") as fh:
         lines = fh.readlines()
 
     if not lines:
@@ -241,7 +314,7 @@ def parse_samplesheet(path: Path) -> List[Dict[str, str]]:
     return samples
 
 
-def find_samplesheet(fastq_dir: Path) -> Optional[Path]:
+def find_samplesheet(fastq_dir: Path) -> Path | None:
     """Auto-detect a SampleSheet.csv in the FASTQ directory or its parent.
 
     Searches for common SampleSheet file names in the FASTQ directory
@@ -274,7 +347,8 @@ def find_samplesheet(fastq_dir: Path) -> Optional[Path]:
 # FASTQ discovery
 # ---------------------------------------------------------------------------
 
-def discover_fastq_files(fastq_dir: Path) -> List[Dict[str, str]]:
+
+def discover_fastq_files(fastq_dir: Path) -> list[dict[str, str]]:
     """Scan a directory for Illumina-named FASTQ file pairs.
 
     Finds all *_R1_001.fastq.gz files matching the Illumina naming convention,
@@ -324,14 +398,16 @@ def discover_fastq_files(fastq_dir: Path) -> List[Dict[str, str]]:
             skipped_r2 += 1
             continue
 
-        pairs.append({
-            "basename": basename,
-            "lane": lane,
-            "lane_str": lane_str,
-            "sample_name": sample,
-            "r1_path": str(fpath),
-            "r2_path": str(r2_path),
-        })
+        pairs.append(
+            {
+                "basename": basename,
+                "lane": lane,
+                "lane_str": lane_str,
+                "sample_name": sample,
+                "r1_path": str(fpath),
+                "r2_path": str(r2_path),
+            }
+        )
 
     if not pairs:
         sys.exit(
@@ -347,7 +423,8 @@ def discover_fastq_files(fastq_dir: Path) -> List[Dict[str, str]]:
 # Merge SampleSheet + FASTQ data into samples.tsv rows
 # ---------------------------------------------------------------------------
 
-def infer_project(fastq_dir: Path, project_arg: Optional[str]) -> str:
+
+def infer_project(fastq_dir: Path, project_arg: str | None) -> str:
     """Determine the project identifier.
 
     Priority:
@@ -375,8 +452,8 @@ def infer_project(fastq_dir: Path, project_arg: Optional[str]) -> str:
 
 
 def build_samples_table(
-    fastq_pairs: List[Dict[str, str]],
-    samplesheet_entries: Optional[List[Dict[str, str]]],
+    fastq_pairs: list[dict[str, str]],
+    samplesheet_entries: list[dict[str, str]] | None,
     project: str,
 ) -> pd.DataFrame:
     """Combine FASTQ discovery results with SampleSheet metadata.
@@ -394,7 +471,7 @@ def build_samples_table(
         DataFrame with columns: fastq_files_basename, lane, project_sample, mdc_project.
     """
     # Build a lookup from SampleSheet sample_name to entry
-    ss_lookup: Dict[str, Dict[str, str]] = {}
+    ss_lookup: dict[str, dict[str, str]] = {}
     if samplesheet_entries:
         for entry in samplesheet_entries:
             name = entry["sample_name"]
@@ -431,12 +508,14 @@ def build_samples_table(
                     matched_ss.add(ss_name)
                     break
 
-        rows.append({
-            "fastq_files_basename": basename,
-            "lane": lane_str,
-            "project_sample": project_sample,
-            "mdc_project": entry_project,
-        })
+        rows.append(
+            {
+                "fastq_files_basename": basename,
+                "lane": lane_str,
+                "project_sample": project_sample,
+                "mdc_project": entry_project,
+            }
+        )
 
     # Warn about SampleSheet entries that had no matching FASTQ files
     if samplesheet_entries:
@@ -448,31 +527,251 @@ def build_samples_table(
                     file=sys.stderr,
                 )
 
-    df = pd.DataFrame(rows, columns=["fastq_files_basename", "lane", "project_sample", "mdc_project"])
+    df = pd.DataFrame(
+        rows, columns=["fastq_files_basename", "lane", "project_sample", "mdc_project"]
+    )
     df = df.sort_values(["project_sample", "lane", "fastq_files_basename"]).reset_index(drop=True)
     return df
+
+
+# ---------------------------------------------------------------------------
+# Reference data discovery
+# ---------------------------------------------------------------------------
+
+
+def _find_genome_fastas(search_dir: Path) -> list[dict[str, Any]]:
+    """Find reference genome FASTA files in a directory."""
+    results: list[dict[str, Any]] = []
+    if not search_dir.is_dir():
+        return results
+    for ext in GENOME_EXTENSIONS:
+        for fasta in search_dir.glob(ext):
+            if fasta.name.startswith("."):
+                continue
+            # Check companion files
+            has_fai = (fasta.parent / (fasta.name + ".fai")).is_file()
+            has_dict = any(
+                (fasta.parent / fasta.name.rsplit(".", 1)[0]).with_suffix(".dict").is_file()
+                for _ in [None]
+            )
+            has_bwa = (
+                any(
+                    (fasta.parent / (fasta.name + ext)).is_file()
+                    for ext in BWA_INDEX_EXTS[:5]  # check classic first
+                )
+                or any(
+                    (fasta.parent / (fasta.name + ext)).is_file()
+                    for ext in BWA_INDEX_EXTS[5:]  # check 64-bit
+                )
+            )
+            # Check for .gz companion
+            gz_path = fasta.parent / (fasta.name + ".gz")
+            has_gz = gz_path.is_file()
+            results.append(
+                {
+                    "path": str(fasta),
+                    "gz_path": str(gz_path) if has_gz else "",
+                    "has_fai": has_fai,
+                    "has_dict": has_dict,
+                    "has_bwa": has_bwa,
+                    "has_gz": has_gz,
+                    "name": fasta.name,
+                }
+            )
+    # Also check for .gz-only references (BWA index built from .gz)
+    for ext in GENOME_EXTENSIONS:
+        for fasta_gz in search_dir.glob(ext + ".gz"):
+            uncompressed = fasta_gz.parent / fasta_gz.name[:-3]
+            if uncompressed.is_file():
+                continue  # already found above
+            has_bwa = any(
+                (fasta_gz.parent / (fasta_gz.name + ext)).is_file() for ext in BWA_INDEX_EXTS
+            )
+            if has_bwa:
+                results.append(
+                    {
+                        "path": "",
+                        "gz_path": str(fasta_gz),
+                        "has_fai": False,
+                        "has_dict": False,
+                        "has_bwa": has_bwa,
+                        "has_gz": True,
+                        "name": fasta_gz.name,
+                    }
+                )
+    return results
+
+
+def _find_known_sites_vcfs(search_dir: Path) -> list[str]:
+    """Find known-sites VCF files matching GATK resource bundle patterns."""
+    results: list[str] = []
+    if not search_dir.is_dir():
+        return results
+    for pattern in KNOWN_SITES_PATTERNS:
+        for vcf in search_dir.glob(pattern):
+            # Only include .vcf.gz or .vcf (not .vcf.gz.tbi)
+            if vcf.name.endswith(".tbi") or vcf.name.endswith(".idx"):
+                continue
+            # Check for tabix index
+            has_index = (vcf.parent / (vcf.name + ".tbi")).is_file() or (
+                vcf.parent / (vcf.name + ".idx")
+            ).is_file()
+            if not has_index:
+                print(f"  Warning: No index for {vcf.name}", file=sys.stderr)
+            results.append(str(vcf))
+    # Deduplicate (patterns may overlap)
+    return sorted(set(results))
+
+
+def discover_reference_data(
+    ref_dir: Path | None,
+    project_root: Path | None = None,
+) -> dict[str, Any]:
+    """Scan for reference genome and known-sites VCFs.
+
+    Searches in order: explicit --ref-dir, relative project paths, shared HPC locations.
+
+    Returns:
+        Dict with keys: genome, genome_gz, build, known_sites, search_log.
+    """
+    search_log: list[str] = []
+    genomes: list[dict[str, Any]] = []
+    known_sites: list[str] = []
+
+    # Build search order for reference genomes
+    ref_search = []
+    if ref_dir:
+        ref_search.append(ref_dir)
+    if project_root:
+        for rel in REF_SEARCH_DIRS:
+            ref_search.append(project_root / rel)
+    for shared in SHARED_REF_DIRS:
+        ref_search.append(Path(shared))
+
+    # Search for genomes
+    for search_path in ref_search:
+        if not search_path.is_dir():
+            continue
+        found = _find_genome_fastas(search_path)
+        if found:
+            search_log.append(f"  Found {len(found)} genome(s) in {search_path}")
+            for g in found:
+                status = []
+                if g["has_bwa"]:
+                    status.append("BWA")
+                if g["has_fai"]:
+                    status.append("FAI")
+                if g["has_dict"]:
+                    status.append("Dict")
+                search_log.append(f"    {g['name']}  [{', '.join(status) or 'no indexes'}]")
+            genomes.extend(found)
+
+    # Build search order for known-sites
+    ks_search = []
+    if ref_dir:
+        ks_search.append(ref_dir)
+        # Also check parent and sibling dirs
+        if ref_dir.parent.is_dir():
+            for sibling in ("gatk_bundle", "GATK_resource_bundle", "known_sites"):
+                candidate = ref_dir.parent / sibling
+                if candidate.is_dir():
+                    ks_search.append(candidate)
+    if project_root:
+        for rel in KNOWN_SITES_SEARCH_DIRS:
+            ks_search.append(project_root / rel)
+    for shared in SHARED_KNOWN_SITES_DIRS:
+        ks_search.append(Path(shared))
+
+    # Search for known-sites
+    for search_path in ks_search:
+        if not search_path.is_dir():
+            continue
+        found_vcfs = _find_known_sites_vcfs(search_path)
+        if found_vcfs:
+            search_log.append(f"  Found {len(found_vcfs)} known-sites VCF(s) in {search_path}")
+            for vcf_path in found_vcfs:
+                search_log.append(f"    {Path(vcf_path).name}")
+            known_sites.extend(found_vcfs)
+
+    # Deduplicate known-sites (same file found via different search paths)
+    seen_names = set()
+    unique_ks = []
+    for ks in known_sites:
+        name = Path(ks).name
+        if name not in seen_names:
+            seen_names.add(name)
+            unique_ks.append(ks)
+    known_sites = unique_ks
+
+    # Pick best genome (prefer one with BWA index + uncompressed)
+    genome_path = ""
+    genome_gz_path = ""
+    build = "GRCh38"
+    if genomes:
+        # Sort: prefer BWA-indexed, then with FAI, then with uncompressed path
+        best = sorted(
+            genomes,
+            key=lambda g: (g["has_bwa"], g["has_fai"], g["has_dict"], bool(g["path"])),
+            reverse=True,
+        )[0]
+        genome_path = best["path"]
+        genome_gz_path = best["gz_path"]
+        # Infer build from filename
+        name_lower = best["name"].lower()
+        if "grch37" in name_lower or "hg19" in name_lower or "hs37" in name_lower:
+            build = "GRCh37"
+
+    if not genomes:
+        search_log.append("  No reference genome found")
+    if not known_sites:
+        search_log.append("  No known-sites VCFs found")
+
+    return {
+        "genome": genome_path,
+        "genome_gz": genome_gz_path,
+        "build": build,
+        "known_sites": known_sites,
+        "search_log": search_log,
+    }
 
 
 # ---------------------------------------------------------------------------
 # Config template generation
 # ---------------------------------------------------------------------------
 
-CONFIG_TEMPLATE = """\
+
+def _build_config_yaml(
+    ref_data: dict[str, Any],
+    fastq_folder: str,
+    output_folder: str,
+    samples_path: str,
+) -> str:
+    """Build config.yaml content from discovered reference data and paths."""
+    genome = ref_data.get("genome", "") or "EDIT_ME: /path/to/reference.fna"
+    genome_gz = ref_data.get("genome_gz", "") or ""
+    build = ref_data.get("build", "GRCh38")
+    known_sites = ref_data.get("known_sites", [])
+
+    # Format known-sites list
+    if known_sites:
+        ks_lines = "\n".join(f'    - "{ks}"' for ks in known_sites)
+    else:
+        ks_lines = '    - "EDIT_ME: /path/to/known_sites.vcf.gz"'
+
+    return f"""\
 # =============================================================================
 # config/config.yaml -- sm-alignment pipeline configuration
 # =============================================================================
 # Generated by: scripts/generate_config.py
-# Edit paths and parameters below for your project.
+# Review all paths below before running the pipeline.
 
 # --- Reference genome & known variant sites ---
 ref:
-  genome: "analysis/ref/GRCh38/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna"
-  genome_gz: "analysis/ref/GRCh38/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz"
-  build: "GRCh38"
+  genome: "{genome}"
+  genome_gz: "{genome_gz}"
+  build: "{build}"
   known_sites:
-    - "analysis/GATK_resource_bundle/af-only-gnomad.hg38.vcf.gz"
-    - "analysis/GATK_resource_bundle/af-only-gnomad.hg38.common_biallelic.vcf.gz"
-    - "analysis/GATK_resource_bundle/1000g_pon.hg38.vcf.gz"
+{ks_lines}
 
 # --- Paths ---
 paths:
@@ -546,27 +845,25 @@ def generate_config_template(
     fastq_dir: Path,
     samples_path: str,
     project: str,
+    ref_data: dict[str, Any],
     dry_run: bool = False,
     force: bool = False,
 ) -> None:
-    """Generate a starter config.yaml from template.
+    """Generate config.yaml with discovered reference paths.
 
     Args:
         config_output: Where to write the config file.
         fastq_dir: FASTQ directory (fills paths.fastq_folder).
         samples_path: Value for paths.samples.
         project: Project identifier (used in output folder path).
+        ref_data: Discovered reference data from discover_reference_data().
         dry_run: If True, print content but do not write.
         force: If True, overwrite existing file without asking.
     """
     fastq_folder = str(fastq_dir).replace("\\", "/")
     output_folder = f"results/{project}"
 
-    content = CONFIG_TEMPLATE.format(
-        samples_path=samples_path,
-        fastq_folder=fastq_folder,
-        output_folder=output_folder,
-    )
+    content = _build_config_yaml(ref_data, fastq_folder, output_folder, samples_path)
 
     if dry_run:
         print(f"\n--- Config template ({config_output}) ---")
@@ -590,10 +887,11 @@ def generate_config_template(
 # Output formatting and writing
 # ---------------------------------------------------------------------------
 
+
 def print_summary(
     df: pd.DataFrame,
-    samplesheet_entries: Optional[List[Dict[str, str]]],
-    fastq_pairs: List[Dict[str, str]],
+    samplesheet_entries: list[dict[str, str]] | None,
+    fastq_pairs: list[dict[str, str]],
 ) -> None:
     """Print a human-readable summary of the generated samples table.
 
@@ -657,22 +955,157 @@ def write_samples_tsv(
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
+def _prompt(prompt: str, default: str = "") -> str:
+    """Prompt the user for input with an optional default value."""
+    if default:
+        result = input(f"{prompt} [{default}]: ").strip()
+        return result if result else default
+    return input(f"{prompt}: ").strip()
+
+
+def _prompt_yn(prompt: str, default: bool = True) -> bool:
+    """Prompt for yes/no with a default."""
+    suffix = "[Y/n]" if default else "[y/N]"
+    result = input(f"{prompt} {suffix}: ").strip().lower()
+    if not result:
+        return default
+    return result in ("y", "yes")
+
+
+def _prompt_path(prompt: str, default: str = "", must_exist: bool = True) -> str:
+    """Prompt for a filesystem path, re-prompting on invalid input."""
+    while True:
+        raw = _prompt(prompt, default)
+        if not raw:
+            if not must_exist:
+                return ""
+            print("  Path cannot be empty. Please try again.")
+            continue
+        p = Path(raw).expanduser()
+        if must_exist and not p.exists():
+            print(f"  Path does not exist: {p}")
+            retry = _prompt_yn("  Try again?", default=True)
+            if not retry:
+                return str(p)
+            continue
+        return str(p)
+
+
+def interactive_mode() -> None:
+    """Guided wizard for generating pipeline config files."""
+    print()
+    print("=" * 60)
+    print("  sm-alignment — Config Generator (interactive)")
+    print("=" * 60)
+    print()
+
+    # 1. FASTQ directory
+    fastq_dir_str = _prompt_path("FASTQ directory")
+    fastq_dir = Path(fastq_dir_str).resolve()
+
+    # 2. SampleSheet
+    ss_path: Path | None = find_samplesheet(fastq_dir)
+    if ss_path:
+        print(f"\n  Auto-detected SampleSheet: {ss_path}")
+        use_detected = _prompt_yn("  Use this SampleSheet?", default=True)
+        if not use_detected:
+            custom = _prompt_path(
+                "  Path to SampleSheet.csv (leave empty to skip)", must_exist=False
+            )
+            ss_path = Path(custom) if custom else None
+    else:
+        print("\n  No SampleSheet.csv found in FASTQ directory.")
+        custom = _prompt_path("  Path to SampleSheet.csv (leave empty to skip)", must_exist=False)
+        ss_path = Path(custom) if custom else None
+
+    # 3. Project name
+    auto_project = infer_project(fastq_dir, None)
+    project = _prompt("Project identifier", default=auto_project)
+
+    # 4. Output paths
+    samples_output = _prompt("Output samples.tsv path", default="config/samples.tsv")
+
+    # 5. Generate config.yaml?
+    gen_config = _prompt_yn("\nAlso generate config/config.yaml?", default=True)
+
+    ref_dir: Path | None = None
+    config_output = "config/config.yaml"
+    if gen_config:
+        config_output = _prompt("Output config.yaml path", default="config/config.yaml")
+
+        # 6. Reference data
+        print("\n  Reference data discovery")
+        print("  The script can scan for reference genome and known-sites VCFs.")
+        custom_ref = _prompt_path(
+            "  Reference data directory (leave empty to auto-scan)",
+            must_exist=False,
+        )
+        if custom_ref:
+            ref_dir = Path(custom_ref).resolve()
+
+    # 7. Dry-run or write?
+    dry_run = not _prompt_yn("\nWrite files now?", default=True)
+    force = False
+    if not dry_run:
+        force = _prompt_yn("Overwrite existing files without asking?", default=False)
+
+    # ---- Execute with collected parameters ----
+    print()
+
+    # Discover FASTQs
+    fastq_pairs = discover_fastq_files(fastq_dir)
+
+    # Parse SampleSheet
+    samplesheet_entries: list[dict[str, str]] | None = None
+    if ss_path and ss_path.is_file():
+        samplesheet_entries = parse_samplesheet(ss_path)
+
+    # Build table
+    df = build_samples_table(fastq_pairs, samplesheet_entries, project)
+    print_summary(df, samplesheet_entries, fastq_pairs)
+
+    # Write samples.tsv
+    write_samples_tsv(df, Path(samples_output), dry_run=dry_run, force=force)
+
+    # Generate config.yaml
+    if gen_config:
+        project_root = fastq_dir.parent
+        print("Scanning for reference data...")
+        ref_data = discover_reference_data(ref_dir, project_root)
+        for line in ref_data.get("search_log", []):
+            print(line)
+        print()
+
+        generate_config_template(
+            config_output=Path(config_output),
+            fastq_dir=fastq_dir,
+            samples_path=samples_output,
+            project=project,
+            ref_data=ref_data,
+            dry_run=dry_run,
+            force=force,
+        )
+
+    print("\nDone.")
+
+
 def main() -> None:
     """Main entry point: parse arguments, discover files, generate output."""
     parser = argparse.ArgumentParser(
-        description="Generate config/samples.tsv from sequencing facility deliverables.",
+        description="Generate config/samples.tsv from sequencing facility deliverables.\n"
+        "Run without arguments for an interactive guided wizard.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
-  %(prog)s --fastq-dir /data/project/fastqs
-  %(prog)s --fastq-dir /data/project/fastqs --samplesheet SampleSheet.csv
+  %(prog)s                                                   # interactive wizard
+  %(prog)s --fastq-dir /data/project/fastqs                  # flags mode
   %(prog)s --fastq-dir /data/project/fastqs --config-template --dry-run
   %(prog)s --fastq-dir /data/project/fastqs --project A5297 --force
         """,
     )
     parser.add_argument(
         "--fastq-dir",
-        required=True,
         help="Directory containing FASTQ files (and optionally SampleSheet.csv)",
     )
     parser.add_argument(
@@ -689,9 +1122,14 @@ Examples:
         help="Output samples.tsv path (default: config/samples.tsv)",
     )
     parser.add_argument(
+        "--ref-dir",
+        help="Directory containing reference genome and/or known-sites VCFs "
+        "(auto-scans common locations if not specified)",
+    )
+    parser.add_argument(
         "--config-template",
         action="store_true",
-        help="Also generate a config.yaml template",
+        help="Also generate a config.yaml with discovered reference paths",
     )
     parser.add_argument(
         "--config-output",
@@ -711,23 +1149,28 @@ Examples:
 
     args = parser.parse_args()
 
+    # If no --fastq-dir provided, launch interactive wizard
+    if not args.fastq_dir:
+        interactive_mode()
+        return
+
     fastq_dir = Path(args.fastq_dir).resolve()
 
     # ---- Discover FASTQ files ----
     fastq_pairs = discover_fastq_files(fastq_dir)
 
     # ---- Parse SampleSheet (if available) ----
-    samplesheet_entries: Optional[List[Dict[str, str]]] = None
+    samplesheet_entries: list[dict[str, str]] | None = None
 
     if args.samplesheet:
-        ss_path = Path(args.samplesheet)
-        if not ss_path.is_file():
-            sys.exit(f"Error: SampleSheet not found: {ss_path}")
-        samplesheet_entries = parse_samplesheet(ss_path)
+        ss_explicit = Path(args.samplesheet)
+        if not ss_explicit.is_file():
+            sys.exit(f"Error: SampleSheet not found: {ss_explicit}")
+        samplesheet_entries = parse_samplesheet(ss_explicit)
     else:
-        ss_path = find_samplesheet(fastq_dir)
-        if ss_path:
-            samplesheet_entries = parse_samplesheet(ss_path)
+        ss_auto = find_samplesheet(fastq_dir)
+        if ss_auto:
+            samplesheet_entries = parse_samplesheet(ss_auto)
 
     # ---- Determine project ----
     project = infer_project(fastq_dir, args.project)
@@ -744,12 +1187,23 @@ Examples:
 
     # ---- Generate config template (optional) ----
     if args.config_template:
+        ref_dir = Path(args.ref_dir).resolve() if args.ref_dir else None
+        # Use parent of fastq_dir as project root for relative searches
+        project_root = fastq_dir.parent
+
+        print("Scanning for reference data...")
+        ref_data = discover_reference_data(ref_dir, project_root)
+        for line in ref_data.get("search_log", []):
+            print(line)
+        print()
+
         config_output = Path(args.config_output)
         generate_config_template(
             config_output=config_output,
             fastq_dir=fastq_dir,
             samples_path=args.output,
             project=project,
+            ref_data=ref_data,
             dry_run=args.dry_run,
             force=args.force,
         )

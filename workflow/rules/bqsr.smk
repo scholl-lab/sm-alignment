@@ -7,9 +7,7 @@ rule base_recalibration:
     params:
         java_opts=get_java_opts,
         reference=REF,
-        known_sites=lambda wc: " ".join(
-            f'--known-sites "{ks}"' for ks in KNOWN_SITES
-        ),
+        known_sites=lambda wc: " ".join(f'--known-sites "{ks}"' for ks in KNOWN_SITES),
         extra=config.get("params", {}).get("gatk", {}).get("BaseRecalibrator", ""),
     threads: 4
     resources:
