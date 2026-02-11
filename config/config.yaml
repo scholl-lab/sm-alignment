@@ -13,9 +13,11 @@ ref:
     - "analysis/GATK_resource_bundle/1000g_pon.hg38.vcf.gz"
 
 # --- Paths ---
+# NOTE: fastq_folder should point to raw FASTQs when trimming.enabled is false,
+# or to pre-trimmed FASTQs if trimming was performed externally.
 paths:
   samples: "config/samples.tsv"
-  fastq_folder: "results/exomes/bbduk_trimmed"
+  fastq_folder: "results/exomes/fastq"
   output_folder: "results/exomes"
   log_subdir: "logs"
 

@@ -1,6 +1,3 @@
-import glob as _glob
-
-
 # =============================================================================
 # Subset BAM by BED regions
 # =============================================================================
@@ -10,11 +7,21 @@ SUBSET_SUFFIX = SUBSET_CFG.get("output_suffix", ".subset.bam")
 SUBSET_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "subset")
 
 
+def _get_subset_bed(wildcards):
+    """Return BED file path, raising a clear error if not configured."""
+    if not SUBSET_BED:
+        raise ValueError(
+            "subset.bed_file is not set in config. "
+            "Provide a BED file path to use the subset_bam rule."
+        )
+    return SUBSET_BED
+
+
 rule subset_bam:
     """Extract BAM reads overlapping regions in a BED file."""
     input:
         bam_file=os.path.join(BQSR_DIR, "{sample}" + FINAL_BAM_SUFFIX),
-        bed_file=SUBSET_BED,
+        bed_file=_get_subset_bed,
     output:
         bam=os.path.join(SUBSET_OUTPUT_DIR, "{sample}" + SUBSET_SUFFIX),
     threads: 1
@@ -109,8 +116,8 @@ rule join_md5sums:
 rule align_and_sort:
     """BWA alignment with samblaster dedup piped to samtools sort."""
     input:
-        r1="{prefix}.bbduk_R1.fastq.gz",
-        r2="{prefix}.bbduk_R2.fastq.gz",
+        r1="{prefix}" + TRIMMED_R1_SUFFIX,
+        r2="{prefix}" + TRIMMED_R2_SUFFIX,
     output:
         sorted_bam="{prefix}.sorted.bam",
     params:

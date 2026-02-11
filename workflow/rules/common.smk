@@ -12,7 +12,7 @@ from rules.helpers import (
 # Config shortcuts
 # =============================================================================
 REF = config["ref"]["genome"]
-REF_GZ = config["ref"].get("genome_gz", "")
+REF_GZ = config["ref"].get("genome_gz", "") or REF
 REF_BUILD = config["ref"]["build"]
 KNOWN_SITES = config["ref"]["known_sites"]
 
@@ -97,13 +97,3 @@ def get_java_opts(wildcards, resources):
     Reserves 20% of mem_mb for JVM non-heap overhead.
     """
     return _get_java_opts_impl(resources.mem_mb, resources.tmpdir)
-
-
-# =============================================================================
-# Ensure output directories exist
-# =============================================================================
-_dirs = [ALIGNED_DIR, MERGED_DIR, DEDUP_DIR, BQSR_DIR, LOG_DIR]
-if TRIMMING_ENABLED:
-    _dirs.append(TRIMMED_DIR)
-for _d in _dirs:
-    os.makedirs(_d, exist_ok=True)
