@@ -1,10 +1,12 @@
 # =============================================================================
-# Charité HPC cluster profile
+# Charité HPC cluster profile (Snakemake 8+ executor plugin)
 # =============================================================================
 # Loaded via --profile profiles/charite (auto-detected by run_snakemake.sh).
 #
 # The Charité cluster has no system-wide Snakemake profile, so we provide
-# the SLURM submission command here. On BIH HPC, cubi-v1 serves this role.
+# SLURM executor settings here. On BIH HPC, cubi-v1 serves this role.
+#
+# Requires: pip install snakemake-executor-plugin-slurm
 #
 # Key Charité constraints:
 #   - Max walltime: 2 days (2-00:00:00)
@@ -12,6 +14,8 @@
 #   - Conda requires: source /etc/profile.d/conda.sh
 # =============================================================================
 
-cluster: "sbatch --parsable --partition=compute --time={resources.runtime} --mem={resources.mem_mb}M --cpus-per-task={threads} --output=slurm_logs/slurm-%j.log"
+executor: slurm
+default-resources:
+  slurm_partition: compute
 jobs: 50
 latency-wait: 60
