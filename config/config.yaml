@@ -1,0 +1,83 @@
+# =============================================================================
+# config/config.yaml — sm-alignment pipeline configuration
+# =============================================================================
+
+# --- Reference genome & known variant sites ---
+ref:
+  genome: "analysis/ref/GRCh38/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna"
+  genome_gz: "analysis/ref/GRCh38/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz"
+  build: "GRCh38"
+  known_sites:
+    - "analysis/GATK_resource_bundle/af-only-gnomad.hg38.vcf.gz"
+    - "analysis/GATK_resource_bundle/af-only-gnomad.hg38.common_biallelic.vcf.gz"
+    - "analysis/GATK_resource_bundle/1000g_pon.hg38.vcf.gz"
+
+# --- Paths ---
+paths:
+  samples: "config/samples.tsv"
+  fastq_folder: "results/exomes/bbduk_trimmed"
+  output_folder: "results/exomes"
+  log_subdir: "logs"
+
+# --- Read group defaults ---
+read_group:
+  platform: "ILLUMINA"
+
+# --- FASTQ file naming patterns ---
+fastq:
+  r1_suffix: "_R1_001.fastq.gz"
+  r2_suffix: "_R2_001.fastq.gz"
+  trimmed_r1_suffix: ".bbduk_R1_001.fastq.gz"
+  trimmed_r2_suffix: ".bbduk_R2_001.fastq.gz"
+
+# --- BAM file naming suffixes ---
+bam:
+  merged_suffix: ".merged.bam"
+  dedup_suffix: ".merged.dedup.bam"
+  dedup_metrics_suffix: ".merged.dedup_metrics.txt"
+  recal_table_suffix: ".merged.dedup.recal_data.table"
+  final_suffix: ".merged.dedup.bqsr.bam"
+
+# --- Processing options ---
+processing:
+  compression_level: 6
+
+# --- Tool-specific extra CLI arguments (passthrough strings) ---
+params:
+  bwa_mem:
+    extra: ""
+  samtools:
+    sort_extra: ""
+    merge_extra: ""
+  gatk:
+    MarkDuplicates: "--CREATE_INDEX true --VALIDATION_STRINGENCY SILENT"
+    BaseRecalibrator: ""
+    ApplyBQSR: ""
+
+# --- BBDuk trimming parameters ---
+trimming:
+  enabled: false
+  fastq_dirs:
+    - "download/exomes/run1"
+    - "download/exomes/run2"
+    - "download/exomes/run3"
+  fastq_pattern: "*_R1_001.fastq.gz"
+  bbduk_ref: "adapters,artifacts"
+  ktrim: "r"
+  k: 23
+  mink: 11
+  hdist: 1
+  tpe: "t"
+  tbo: "t"
+  ftl: 5
+  trimpolyg: 3
+  trimpolya: 3
+  qtrim: "t"
+  trimq: 10
+  ziplevel: 5
+  quantize: "0,10,20,30,40,50,60"
+
+# --- Subset BAM (optional) ---
+subset:
+  bed_file: ""
+  output_suffix: ".subset.bam"
