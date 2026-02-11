@@ -1,26 +1,47 @@
-# Code for alignment and BAM reprocessing
+# sm-alignment
 
-## calculate all md5 checksums in input folder and subfolders
+Snakemake pipeline for DNA sequence alignment and BAM processing (BWA + GATK).
+
+## Quick Start
+
+1. Edit `config/config.yaml` with your reference paths, known-sites, and sample metadata
+2. Edit `config/samples.tsv` with your sample information
+3. Adjust resource allocation in `profiles/default/config.yaml` if needed
+4. Submit to SLURM:
+
 ```bash
-    snakemake -s md5sum_files.smk --profile=cubi-dev -j1
+sbatch scripts/run_snakemake.sh workflow/Snakefile
 ```
 
-## run alignment for FASTQ files in input folder and subfolders
+## Pipeline Stages
+
+FASTQ → BWA alignment → merge lanes → GATK MarkDuplicates → GATK BQSR → analysis-ready BAM
+
+Optional: BBDuk adapter trimming (set `trimming.enabled: true` in config)
+
+## Dry Run
+
 ```bash
-    sbatch run_alignment_v2.sh
+snakemake -s workflow/Snakefile --configfile config/config.yaml -n
 ```
 
-## merge all the lane bam files into one sample bam file
-```bash
-    sbatch merge_bams.sh
+## Configuration
+
+| File | Purpose |
+|---|---|
+| `config/config.yaml` | Pipeline settings (references, paths, tool parameters) |
+| `config/samples.tsv` | Sample metadata (basename, lane, sample name, project) |
+| `profiles/default/config.yaml` | Resource allocation (threads, memory, time per rule) |
+
+## Project Structure
+
+```
+workflow/           Snakemake workflow (Snakefile, rules/, envs/, schemas/)
+config/             Configuration and sample metadata
+profiles/default/   Resource allocation profile
+scripts/            SLURM submission script
 ```
 
-## deduplicate the merged bam files
-```bash
-    sbatch run_dedup_bams.sh
-```
+## Legacy Workflows
 
-## run bqsr for the deduplicated bam files
-```bash
-    sbatch run_bqsr_bams.sh
-```
+The standalone workflows in `scripts/snakemake/` and individual submission scripts in `scripts/run_*.sh` / `scripts/submit_*.sh` are retained for reference but superseded by the modular `workflow/` structure.
