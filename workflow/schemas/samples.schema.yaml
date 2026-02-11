@@ -1,0 +1,26 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+description: Row schema for sample metadata TSV
+type: object
+
+properties:
+  fastq_files_basename:
+    type: string
+    description: FASTQ file base name (used as primary key)
+  lane:
+    type: string
+    description: Sequencing lane identifier
+  project_sample:
+    type: string
+    description: Sample name used for merging lane-level BAMs
+  mdc_project:
+    type: string
+    description: Project identifier for read group PU tag
+  subfolder:
+    type: string
+    description: Optional subdirectory within FASTQ folder for multi-run support
+
+required:
+  - fastq_files_basename
+  - lane
+  - project_sample
+  - mdc_project

@@ -1,0 +1,4 @@
+fastq_files_basename	lane	project_sample	mdc_project
+SampleA_S1_L001	L001	SampleA	TestProject
+SampleA_S1_L002	L002	SampleA	TestProject
+SampleB_S2_L001	L001	SampleB	TestProject

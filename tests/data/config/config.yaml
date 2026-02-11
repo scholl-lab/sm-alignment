@@ -1,0 +1,51 @@
+# Minimal valid config for testing
+ref:
+  genome: "tests/data/ref/dummy.fna"
+  genome_gz: ""
+  build: "GRCh38"
+  known_sites:
+    - "tests/data/known_sites/dbsnp_mini.vcf.gz"
+    - "tests/data/known_sites/Mills_and_1000G_mini.vcf.gz"
+
+paths:
+  samples: "tests/data/config/samples.tsv"
+  fastq_folder: "tests/data/fastqs"
+  output_folder: "tests/data/output"
+  log_subdir: "logs"
+
+read_group:
+  platform: "ILLUMINA"
+
+fastq:
+  r1_suffix: "_R1_001.fastq.gz"
+  r2_suffix: "_R2_001.fastq.gz"
+  trimmed_r1_suffix: ".bbduk_R1_001.fastq.gz"
+  trimmed_r2_suffix: ".bbduk_R2_001.fastq.gz"
+
+bam:
+  merged_suffix: ".merged.bam"
+  dedup_suffix: ".merged.dedup.bam"
+  dedup_metrics_suffix: ".merged.dedup_metrics.txt"
+  recal_table_suffix: ".merged.dedup.recal_data.table"
+  final_suffix: ".merged.dedup.bqsr.bam"
+
+processing:
+  compression_level: 6
+
+params:
+  bwa_mem:
+    extra: ""
+  samtools:
+    sort_extra: ""
+    merge_extra: ""
+  gatk:
+    MarkDuplicates: "--CREATE_INDEX true --VALIDATION_STRINGENCY SILENT"
+    BaseRecalibrator: ""
+    ApplyBQSR: ""
+
+trimming:
+  enabled: false
+
+subset:
+  bed_file: ""
+  output_suffix: ".subset.bam"

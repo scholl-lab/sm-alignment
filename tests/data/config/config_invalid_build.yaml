@@ -1,0 +1,11 @@
+# Config with invalid build value (should fail schema validation)
+ref:
+  genome: "tests/data/ref/dummy.fna"
+  build: "hg19"
+  known_sites:
+    - "tests/data/known_sites/dbsnp_mini.vcf.gz"
+
+paths:
+  samples: "tests/data/config/samples.tsv"
+  fastq_folder: "tests/data/fastqs"
+  output_folder: "tests/data/output"

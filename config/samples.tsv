@@ -1,0 +1,3 @@
+fastq_files_basename	lane	project_sample	mdc_project	subfolder
+EXAMPLE_L001	L001	SampleA	ProjectX	run1
+EXAMPLE_L002	L002	SampleA	ProjectX	run1

@@ -1,0 +1,68 @@
+# =============================================================================
+# Workflow Profile — Resource allocation
+# =============================================================================
+# Loaded automatically via --workflow-profile profiles/default
+# Override precedence: CLI > workflow profile > rule defaults > default-resources
+#
+# Adjust values here to match your cluster's resources without modifying
+# any Snakemake workflow files.
+# =============================================================================
+
+# --- Execution settings ---
+latency-wait: 60
+jobs: 20
+rerun-incomplete: true
+printshellcmds: true
+software-deployment-method:
+  - conda
+
+# --- Default resources (baseline for ALL rules) ---
+default-resources:
+  mem_mb: 4000
+  runtime: 120
+
+# --- Per-rule thread counts ---
+set-threads:
+  bwa_map: 16
+  merge_bam_files: 8
+  deduplicate_bam_files: 4
+  base_recalibration: 4
+  apply_bqsr: 4
+  trim_adapters: 4
+  convert_bam_to_fastq: 8
+  subset_bam: 1
+  align_and_sort: 8
+  index_bam: 1
+
+# --- Per-rule resource overrides ---
+set-resources:
+  bwa_map:
+    mem_mb: 19200
+    runtime: 1440
+  merge_bam_files:
+    mem_mb: 9600
+    runtime: 1440
+  deduplicate_bam_files:
+    mem_mb: 17600
+    runtime: 2880
+  base_recalibration:
+    mem_mb: 17600
+    runtime: 2880
+  apply_bqsr:
+    mem_mb: 17600
+    runtime: 2880
+  trim_adapters:
+    mem_mb: 4000
+    runtime: 720
+  convert_bam_to_fastq:
+    mem_mb: 9600
+    runtime: 1440
+  subset_bam:
+    mem_mb: 4000
+    runtime: 120
+  align_and_sort:
+    mem_mb: 15000
+    runtime: 1440
+  index_bam:
+    mem_mb: 4000
+    runtime: 120

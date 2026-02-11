@@ -1,0 +1,196 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+description: Configuration schema for sm-alignment pipeline
+type: object
+
+properties:
+  ref:
+    type: object
+    properties:
+      genome:
+        type: string
+        description: Path to uncompressed reference genome FASTA
+      genome_gz:
+        type: string
+        description: Path to gzipped reference genome FASTA
+      build:
+        type: string
+        description: Reference genome build identifier
+        enum: ["GRCh37", "GRCh38"]
+      known_sites:
+        type: array
+        items:
+          type: string
+        minItems: 1
+        description: Paths to known variant sites VCFs for BQSR
+    required:
+      - genome
+      - build
+      - known_sites
+
+  paths:
+    type: object
+    properties:
+      samples:
+        type: string
+        description: Path to sample metadata TSV file
+      fastq_folder:
+        type: string
+        description: Directory containing input FASTQ files
+      output_folder:
+        type: string
+        description: Base output directory for results
+      log_subdir:
+        type: string
+        default: "logs"
+        description: Subdirectory name for log files
+    required:
+      - samples
+      - fastq_folder
+      - output_folder
+
+  read_group:
+    type: object
+    properties:
+      platform:
+        type: string
+        default: "ILLUMINA"
+        description: Sequencing platform for read group PL tag
+
+  fastq:
+    type: object
+    properties:
+      r1_suffix:
+        type: string
+        default: "_R1_001.fastq.gz"
+      r2_suffix:
+        type: string
+        default: "_R2_001.fastq.gz"
+      trimmed_r1_suffix:
+        type: string
+        default: ".bbduk_R1_001.fastq.gz"
+      trimmed_r2_suffix:
+        type: string
+        default: ".bbduk_R2_001.fastq.gz"
+
+  bam:
+    type: object
+    properties:
+      merged_suffix:
+        type: string
+        default: ".merged.bam"
+      dedup_suffix:
+        type: string
+        default: ".merged.dedup.bam"
+      dedup_metrics_suffix:
+        type: string
+        default: ".merged.dedup_metrics.txt"
+      recal_table_suffix:
+        type: string
+        default: ".merged.dedup.recal_data.table"
+      final_suffix:
+        type: string
+        default: ".merged.dedup.bqsr.bam"
+
+  processing:
+    type: object
+    properties:
+      compression_level:
+        type: integer
+        default: 6
+        minimum: 1
+        maximum: 9
+
+  params:
+    type: object
+    properties:
+      bwa_mem:
+        type: object
+        properties:
+          extra:
+            type: string
+            default: ""
+      samtools:
+        type: object
+        properties:
+          sort_extra:
+            type: string
+            default: ""
+          merge_extra:
+            type: string
+            default: ""
+      gatk:
+        type: object
+        properties:
+          MarkDuplicates:
+            type: string
+            default: "--CREATE_INDEX true --VALIDATION_STRINGENCY SILENT"
+          BaseRecalibrator:
+            type: string
+            default: ""
+          ApplyBQSR:
+            type: string
+            default: ""
+
+  trimming:
+    type: object
+    properties:
+      enabled:
+        type: boolean
+        default: false
+      bbduk_ref:
+        type: string
+        default: "adapters,artifacts"
+      ktrim:
+        type: string
+        default: "r"
+      k:
+        type: integer
+        default: 23
+      mink:
+        type: integer
+        default: 11
+      hdist:
+        type: integer
+        default: 1
+      tpe:
+        type: string
+        default: "t"
+      tbo:
+        type: string
+        default: "t"
+      ftl:
+        type: integer
+        default: 5
+      trimpolyg:
+        type: integer
+        default: 3
+      trimpolya:
+        type: integer
+        default: 3
+      qtrim:
+        type: string
+        default: "t"
+      trimq:
+        type: integer
+        default: 10
+      ziplevel:
+        type: integer
+        default: 5
+      quantize:
+        type: string
+        default: "0,10,20,30,40,50,60"
+
+  subset:
+    type: object
+    properties:
+      bed_file:
+        type: string
+        default: ""
+        description: Path to BED file for region subsetting
+      output_suffix:
+        type: string
+        default: ".subset.bam"
+
+required:
+  - ref
+  - paths
