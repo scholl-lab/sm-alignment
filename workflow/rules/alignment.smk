@@ -6,7 +6,7 @@ rule bwa_map:
     output:
         bam=temp(os.path.join(ALIGNED_DIR, "{basename}.bam")),
     params:
-        reference=REF_GZ,
+        reference=REF,  # not REF_GZ — BWA needs index at <ref>.bwt
         read_group=lambda wc: (
             '"@RG\\tID:{lane}-{sample}\\tSM:{sample}\\tLB:{sample}'
             '\\tPL:{platform}\\tPU:{lane}-{project}"'.format(

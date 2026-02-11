@@ -121,7 +121,7 @@ rule align_and_sort:
     output:
         sorted_bam="{prefix}.sorted.bam",
     params:
-        reference=REF_GZ,
+        reference=REF,  # not REF_GZ — BWA needs index at <ref>.bwt
         read_group=lambda wc: (
             f"@RG\\tID:{os.path.basename(wc.prefix)}"
             f"\\tSM:{os.path.basename(wc.prefix)}"

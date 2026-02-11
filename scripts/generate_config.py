@@ -79,14 +79,20 @@ BWA_INDEX_EXTS = (
     ".64.sa",
 )
 
-# Known-sites VCF patterns (GATK resource bundle)
-KNOWN_SITES_PATTERNS = (
+# BQSR-appropriate known-sites VCF patterns (GATK BaseRecalibrator)
+BQSR_KNOWN_SITES_PATTERNS = (
     "*dbsnp*.vcf*",
     "*known_indels*.vcf*",
     "*Mills_and_1000G*.vcf*",
-    "*af-only-gnomad*.vcf.gz",
-    "*1000g_pon*.vcf.gz",
+    "*1000G_phase1.snps.high_confidence*.vcf*",
 )
+
+# Additional VCFs found but NOT used for BQSR (retained for reference):
+# gnomAD af-only → Mutect2 --germline-resource
+# 1000g_pon      → Mutect2 --panel-of-normals
+
+# Legacy alias kept for backward compatibility
+KNOWN_SITES_PATTERNS = BQSR_KNOWN_SITES_PATTERNS
 
 # Standard search directories for reference data (relative to project root)
 REF_SEARCH_DIRS = [
@@ -602,12 +608,15 @@ def _find_genome_fastas(search_dir: Path) -> list[dict[str, Any]]:
     return results
 
 
-def _find_known_sites_vcfs(search_dir: Path) -> list[str]:
+def _find_known_sites_vcfs(
+    search_dir: Path,
+    patterns: tuple[str, ...] = BQSR_KNOWN_SITES_PATTERNS,
+) -> list[str]:
     """Find known-sites VCF files matching GATK resource bundle patterns."""
     results: list[str] = []
     if not search_dir.is_dir():
         return results
-    for pattern in KNOWN_SITES_PATTERNS:
+    for pattern in patterns:
         for vcf in search_dir.glob(pattern):
             # Only include .vcf.gz or .vcf (not .vcf.gz.tbi)
             if vcf.name.endswith(".tbi") or vcf.name.endswith(".idx"):
@@ -714,12 +723,23 @@ def discover_reference_data(
             key=lambda g: (g["has_bwa"], g["has_fai"], g["has_dict"], bool(g["path"])),
             reverse=True,
         )[0]
-        genome_path = best["path"]
-        genome_gz_path = best["gz_path"]
+        genome_path = str(Path(best["path"]).resolve()) if best["path"] else ""
+        # Verify BWA index exists for the .gz before setting genome_gz (#25)
+        if best.get("has_gz") and best.get("gz_path"):
+            gz = Path(best["gz_path"])
+            gz_has_bwa = any((gz.parent / (gz.name + ext)).is_file() for ext in BWA_INDEX_EXTS[:5])
+            if gz_has_bwa:
+                genome_gz_path = str(gz.resolve())
+            else:
+                search_log.append(f"  Warning: No BWA index for {gz.name}, genome_gz left empty")
+                genome_gz_path = ""
         # Infer build from filename
         name_lower = best["name"].lower()
         if "grch37" in name_lower or "hg19" in name_lower or "hs37" in name_lower:
             build = "GRCh37"
+
+    # Resolve known-sites paths (#23)
+    known_sites = [str(Path(ks).resolve()) for ks in known_sites]
 
     if not genomes:
         search_log.append("  No reference genome found")
@@ -740,6 +760,13 @@ def discover_reference_data(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_path(p: str) -> str:
+    """Resolve a path string to canonical form, skipping placeholders."""
+    if not p or "EDIT_ME" in p:
+        return p
+    return str(Path(p).resolve())
+
+
 def _build_config_yaml(
     ref_data: dict[str, Any],
     fastq_folder: str,
@@ -751,6 +778,12 @@ def _build_config_yaml(
     genome_gz = ref_data.get("genome_gz", "") or ""
     build = ref_data.get("build", "GRCh38")
     known_sites = ref_data.get("known_sites", [])
+
+    # Canonicalize paths (#23) — resolve ../ segments
+    genome = _resolve_path(genome)
+    genome_gz = _resolve_path(genome_gz)
+    fastq_folder = _resolve_path(fastq_folder)
+    known_sites = [_resolve_path(ks) for ks in known_sites]
 
     # Format known-sites list
     if known_sites:

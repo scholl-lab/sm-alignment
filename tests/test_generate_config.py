@@ -472,6 +472,33 @@ class TestFindKnownSitesVcfs:
         # Should be deduplicated
         assert len(results) == len(set(results))
 
+    def test_gnomad_excluded(self, tmp_path):
+        """gnomAD and panel-of-normals VCFs should not be found by default patterns."""
+        d = tmp_path / "ks"
+        d.mkdir()
+        # BQSR-relevant
+        (d / "dbsnp_138.vcf.gz").touch()
+        (d / "dbsnp_138.vcf.gz.tbi").touch()
+        # NOT BQSR-relevant
+        (d / "af-only-gnomad.hg38.vcf.gz").touch()
+        (d / "af-only-gnomad.hg38.vcf.gz.tbi").touch()
+        (d / "1000g_pon.hg38.vcf.gz").touch()
+        (d / "1000g_pon.hg38.vcf.gz.tbi").touch()
+        results = gc._find_known_sites_vcfs(d)
+        names = [Path(r).name for r in results]
+        assert "dbsnp_138.vcf.gz" in names
+        assert "af-only-gnomad.hg38.vcf.gz" not in names
+        assert "1000g_pon.hg38.vcf.gz" not in names
+
+    def test_custom_patterns(self, tmp_path):
+        """Custom patterns parameter should override defaults."""
+        d = tmp_path / "ks"
+        d.mkdir()
+        (d / "af-only-gnomad.hg38.vcf.gz").touch()
+        (d / "af-only-gnomad.hg38.vcf.gz.tbi").touch()
+        results = gc._find_known_sites_vcfs(d, patterns=("*gnomad*.vcf.gz",))
+        assert len(results) == 1
+
 
 # ============================================================================
 # TestDiscoverReferenceData
@@ -515,6 +542,45 @@ class TestDiscoverReferenceData:
         result = gc.discover_reference_data(d)
         assert "with_bwa" in result["genome"]
 
+    def test_genome_gz_without_bwa_index(self, tmp_path):
+        """genome_gz should be empty when .gz exists but has no BWA index."""
+        d = tmp_path / "ref"
+        d.mkdir()
+        (d / "ref.fna").touch()
+        (d / "ref.fna.fai").touch()
+        (d / "ref.fna.gz").touch()  # .gz exists but no BWA index for it
+        for ext in (".amb", ".ann", ".bwt", ".pac", ".sa"):
+            (d / f"ref.fna{ext}").touch()  # BWA index for uncompressed only
+        result = gc.discover_reference_data(d)
+        assert result["genome"]  # uncompressed found
+        assert result["genome_gz"] == ""  # .gz has no BWA index
+        assert any("Warning" in line for line in result["search_log"])
+
+    def test_genome_gz_with_bwa_index(self, tmp_path):
+        """genome_gz should be set when .gz has a BWA index."""
+        d = tmp_path / "ref"
+        d.mkdir()
+        (d / "ref.fna").touch()
+        (d / "ref.fna.fai").touch()
+        (d / "ref.fna.gz").touch()
+        for ext in (".amb", ".ann", ".bwt", ".pac", ".sa"):
+            (d / f"ref.fna{ext}").touch()
+            (d / f"ref.fna.gz{ext}").touch()  # BWA index for .gz too
+        result = gc.discover_reference_data(d)
+        assert result["genome_gz"]  # .gz has BWA index
+
+    def test_paths_are_resolved(self, tmp_path):
+        """Discovered paths should be canonical (no ../ segments)."""
+        # Create ref dir one level deep, then search from parent with ..
+        d = tmp_path / "sub" / "ref"
+        d.mkdir(parents=True)
+        (d / "ref.fna").touch()
+        (d / "ref.fna.fai").touch()
+        for ext in (".amb", ".ann", ".bwt", ".pac", ".sa"):
+            (d / f"ref.fna{ext}").touch()
+        result = gc.discover_reference_data(d)
+        assert ".." not in result["genome"]
+
 
 # ============================================================================
 # TestBuildConfigYaml
@@ -552,6 +618,12 @@ class TestBuildConfigYaml:
         result = gc._build_config_yaml(ref_data, "/fastqs", "/output", "samples.tsv")
         assert "trimming:" in result
         assert "enabled: false" in result
+
+    def test_edit_me_not_resolved(self):
+        """EDIT_ME placeholders should not be resolved by _resolve_path."""
+        ref_data = {"genome": "", "genome_gz": "", "build": "GRCh38", "known_sites": []}
+        result = gc._build_config_yaml(ref_data, "/fastqs", "/output", "samples.tsv")
+        assert "EDIT_ME" in result
 
 
 # ============================================================================

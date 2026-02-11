@@ -170,7 +170,7 @@ The launcher auto-detects whether you're on BIH HPC or Charité HPC:
 | Cluster | Detection | Behavior |
 |---------|-----------|----------|
 | **BIH HPC** | `cubi-v1` profile exists | Uses `--profile=cubi-v1` for job submission |
-| **Charité HPC** | `/etc/profile.d/conda.sh` exists | Uses `--cluster 'sbatch ...'`, sources conda automatically |
+| **Charité HPC** | `/etc/profile.d/conda.sh` exists | Uses SLURM executor plugin (`profiles/charite`), sources conda automatically |
 | **Other/local** | Fallback | Runs without cluster submission |
 
 ### Usage examples
@@ -248,6 +248,34 @@ Charité-specific SLURM submission settings. Used automatically when the launche
 | `workflow/envs/bbtools.yaml` | bbmap 39.06 | trimming |
 
 Conda environments are created automatically by Snakemake on first run (`software-deployment-method: conda` in the workflow profile).
+
+### Software Deployment
+
+The pipeline supports two software deployment strategies:
+
+**1. Per-rule conda environments (default)**
+
+Snakemake creates isolated conda environments from `workflow/envs/*.yaml` on the first run. This is fully reproducible but slow initially. Use `--conda-prefix` to share envs across projects:
+
+```bash
+snakemake --conda-prefix /shared/conda-envs ...
+```
+
+**2. Pre-installed tools (skip per-rule conda)**
+
+Install all tools directly into your `snakemake` environment and disable per-rule conda. This avoids the first-run env creation overhead and works around mamba 2.x incompatibilities:
+
+```bash
+# Install tools into the snakemake environment
+mamba install -n snakemake -c bioconda -c conda-forge \
+    bwa=0.7.18 samtools=1.21 samblaster=0.1.26 gatk4=4.6.1.0 bbmap=39.06
+```
+
+Then comment out `software-deployment-method` in `profiles/default/config.yaml` or pass `--sdm none` on the CLI:
+
+```bash
+sbatch scripts/run_snakemake.sh workflow/Snakefile config/config.yaml --sdm none
+```
 
 ---
 
