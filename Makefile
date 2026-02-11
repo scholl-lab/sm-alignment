@@ -15,7 +15,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 # --- File sets ---------------------------------------------------------------
-PY_FILES   := scripts/generate_config.py
+PY_FILES   := scripts/generate_config.py workflow/rules/helpers.py
 SMK_FILES  := workflow/rules/*.smk workflow/Snakefile
 SH_FILES   := scripts/run_snakemake.sh
 
@@ -82,6 +82,26 @@ format-sh:  ## Fix shell script line endings (LF)
 	@for f in $(SH_FILES); do \
 		sed -i 's/\r$$//' "$$f" && echo "  LF: $$f"; \
 	done
+
+# =============================================================================
+# Tests  (pytest)
+# =============================================================================
+
+.PHONY: test
+test:  ## Run all tests
+	pytest
+
+.PHONY: test-unit
+test-unit:  ## Run unit tests (skip dry-run tests)
+	pytest -m "not dryrun"
+
+.PHONY: test-dryrun
+test-dryrun:  ## Run dry-run tests only
+	pytest -m dryrun
+
+.PHONY: test-cov
+test-cov:  ## Run tests with coverage report
+	pytest --cov=scripts --cov=workflow/rules --cov-report=term-missing
 
 # =============================================================================
 # Utilities

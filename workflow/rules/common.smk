@@ -1,5 +1,11 @@
 import os
 import pandas as pd
+from rules.helpers import (
+    get_java_opts as _get_java_opts_impl,
+    get_samples as _get_samples_impl,
+    get_basenames_for_sample as _get_basenames_impl,
+    resolve_fastq_path as _resolve_fastq_path_impl,
+)
 
 
 # =============================================================================
@@ -55,25 +61,19 @@ samples_df = pd.read_table(config["paths"]["samples"]).set_index(
 
 def get_samples():
     """Return sorted list of unique sample names from metadata."""
-    return sorted(samples_df["project_sample"].unique().tolist())
+    return _get_samples_impl(samples_df)
 
 
 def get_basenames_for_sample(sample):
     """Return all FASTQ basenames belonging to a given sample."""
-    return samples_df.loc[samples_df["project_sample"] == sample, "fastq_files_basename"].tolist()
+    return _get_basenames_impl(samples_df, sample)
 
 
 def _resolve_fastq_path(wildcards, suffix):
     """Build FASTQ path respecting trimming mode and optional subfolder."""
-    row = samples_df.loc[wildcards.basename]
-    subfolder = row.get("subfolder", "") if "subfolder" in samples_df.columns else ""
-    if TRIMMING_ENABLED:
-        base_dir = TRIMMED_DIR
-    else:
-        base_dir = FASTQ_DIR
-    if subfolder:
-        return os.path.join(base_dir, str(subfolder), f"{wildcards.basename}{suffix}")
-    return os.path.join(base_dir, f"{wildcards.basename}{suffix}")
+    return _resolve_fastq_path_impl(
+        wildcards.basename, suffix, samples_df, TRIMMING_ENABLED, TRIMMED_DIR, FASTQ_DIR
+    )
 
 
 def get_fastq_r1(wildcards):
@@ -96,10 +96,7 @@ def get_java_opts(wildcards, resources):
     Derive GATK --java-options from allocated resources.
     Reserves 20% of mem_mb for JVM non-heap overhead.
     """
-    xmx = int(resources.mem_mb * 0.8)
-    xms = int(resources.mem_mb * 0.2)
-    tmpdir = resources.tmpdir
-    return f"-Xms{xms}m -Xmx{xmx}m -Djava.io.tmpdir={tmpdir}"
+    return _get_java_opts_impl(resources.mem_mb, resources.tmpdir)
 
 
 # =============================================================================
