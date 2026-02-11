@@ -137,13 +137,6 @@ properties:
       enabled:
         type: boolean
         default: false
-      fastq_dirs:
-        type: array
-        items:
-          type: string
-      fastq_pattern:
-        type: string
-        default: "*_R1_001.fastq.gz"
       bbduk_ref:
         type: string
         default: "adapters,artifacts"

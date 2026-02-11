@@ -1,8 +1,8 @@
 rule bwa_map:
     """Align paired-end FASTQ per basename, pipe to samtools sort."""
     input:
-        r1=lambda wc: os.path.join(FASTQ_DIR, f"{wc.basename}{R1_SUFFIX}"),
-        r2=lambda wc: os.path.join(FASTQ_DIR, f"{wc.basename}{R2_SUFFIX}"),
+        r1=get_fastq_r1,
+        r2=get_fastq_r2,
     output:
         bam=temp(os.path.join(ALIGNED_DIR, "{basename}.bam")),
     params:

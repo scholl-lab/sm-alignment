@@ -57,11 +57,6 @@ params:
 # --- BBDuk trimming parameters ---
 trimming:
   enabled: false
-  fastq_dirs:
-    - "download/exomes/run1"
-    - "download/exomes/run2"
-    - "download/exomes/run3"
-  fastq_pattern: "*_R1_001.fastq.gz"
   bbduk_ref: "adapters,artifacts"
   ktrim: "r"
   k: 23

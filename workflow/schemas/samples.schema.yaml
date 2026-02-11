@@ -15,6 +15,9 @@ properties:
   mdc_project:
     type: string
     description: Project identifier for read group PU tag
+  subfolder:
+    type: string
+    description: Optional subdirectory within FASTQ folder for multi-run support
 
 required:
   - fastq_files_basename

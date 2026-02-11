@@ -1,71 +1,23 @@
-import glob as _glob
-
-
-# =============================================================================
-# Trimming configuration
-# =============================================================================
 TRIM_CFG = config.get("trimming", {})
-TRIM_FASTQ_DIRS = TRIM_CFG.get("fastq_dirs", [])
-TRIM_FASTQ_PATTERN = TRIM_CFG.get("fastq_pattern", "*_R1_001.fastq.gz")
-TRIMMED_DIR = os.path.join(OUTPUT_DIR, "bbduk_trimmed")
-
-R1_RAW_SUFFIX = config.get("fastq", {}).get("r1_suffix", "_R1_001.fastq.gz")
-R2_RAW_SUFFIX = config.get("fastq", {}).get("r2_suffix", "_R2_001.fastq.gz")
 
 
-def _get_trim_samples():
-    """Discover sample names from R1 FASTQ files across all input directories."""
-    r1_files = []
-    for d in TRIM_FASTQ_DIRS:
-        r1_files.extend(_glob.glob(os.path.join(d, TRIM_FASTQ_PATTERN)))
-    return [os.path.basename(f).replace(R1_RAW_SUFFIX, "") for f in r1_files]
-
-
-def _find_raw_r1(wildcards):
-    """Locate R1 FASTQ for a sample across input directories."""
-    for d in TRIM_FASTQ_DIRS:
-        candidate = os.path.join(d, f"{wildcards.sample}{R1_RAW_SUFFIX}")
-        if os.path.exists(candidate):
-            return candidate
-    raise FileNotFoundError(
-        f"No R1 FASTQ for '{wildcards.sample}' in: {TRIM_FASTQ_DIRS}"
-    )
-
-
-def _find_raw_r2(wildcards):
-    """Locate R2 FASTQ for a sample across input directories."""
-    for d in TRIM_FASTQ_DIRS:
-        candidate = os.path.join(d, f"{wildcards.sample}{R2_RAW_SUFFIX}")
-        if os.path.exists(candidate):
-            return candidate
-    raise FileNotFoundError(
-        f"No R2 FASTQ for '{wildcards.sample}' in: {TRIM_FASTQ_DIRS}"
-    )
-
-
-# =============================================================================
-# Rules
-# =============================================================================
-rule trim_all:
-    input:
-        expand(
-            os.path.join(TRIMMED_DIR, "{sample}.bbduk_R1_001.fastq.gz"),
-            sample=_get_trim_samples(),
-        ),
-        expand(
-            os.path.join(TRIMMED_DIR, "{sample}.bbduk_R2_001.fastq.gz"),
-            sample=_get_trim_samples(),
-        ),
+def _resolve_raw_fastq(wildcards, suffix):
+    """Locate raw FASTQ for trimming, respecting optional subfolder."""
+    row = samples_df.loc[wildcards.basename]
+    subfolder = row.get("subfolder", "") if "subfolder" in samples_df.columns else ""
+    if subfolder:
+        return os.path.join(FASTQ_DIR, str(subfolder), f"{wildcards.basename}{suffix}")
+    return os.path.join(FASTQ_DIR, f"{wildcards.basename}{suffix}")
 
 
 rule trim_adapters:
     """Adapter and quality trimming with BBDuk."""
     input:
-        r1=_find_raw_r1,
-        r2=_find_raw_r2,
+        r1=lambda wc: _resolve_raw_fastq(wc, R1_SUFFIX),
+        r2=lambda wc: _resolve_raw_fastq(wc, R2_SUFFIX),
     output:
-        trimmed_r1=os.path.join(TRIMMED_DIR, "{sample}.bbduk_R1_001.fastq.gz"),
-        trimmed_r2=os.path.join(TRIMMED_DIR, "{sample}.bbduk_R2_001.fastq.gz"),
+        trimmed_r1=os.path.join(TRIMMED_DIR, "{basename}" + TRIMMED_R1_SUFFIX),
+        trimmed_r2=os.path.join(TRIMMED_DIR, "{basename}" + TRIMMED_R2_SUFFIX),
     params:
         ref=TRIM_CFG.get("bbduk_ref", "adapters,artifacts"),
         ziplevel=TRIM_CFG.get("ziplevel", 5),
@@ -87,11 +39,9 @@ rule trim_adapters:
     conda:
         "../envs/bbtools.yaml"
     log:
-        os.path.join(LOG_DIR, "bbduk_trim.{sample}.log"),
+        os.path.join(LOG_DIR, "bbduk_trim.{basename}.log"),
     shell:
         r"""
-        mkdir -p "$(dirname {output.trimmed_r1})"
-
         bbduk.sh \
             threads={threads} \
             in={input.r1} in2={input.r2} \

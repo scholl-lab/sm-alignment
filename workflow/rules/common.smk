@@ -17,8 +17,15 @@ LOG_DIR = os.path.join(OUTPUT_DIR, LOG_SUBDIR)
 
 PLATFORM = config.get("read_group", {}).get("platform", "ILLUMINA")
 
-R1_SUFFIX = config.get("fastq", {}).get("trimmed_r1_suffix", ".bbduk_R1_001.fastq.gz")
-R2_SUFFIX = config.get("fastq", {}).get("trimmed_r2_suffix", ".bbduk_R2_001.fastq.gz")
+# --- FASTQ suffixes (raw and trimmed) ---
+R1_SUFFIX = config.get("fastq", {}).get("r1_suffix", "_R1_001.fastq.gz")
+R2_SUFFIX = config.get("fastq", {}).get("r2_suffix", "_R2_001.fastq.gz")
+TRIMMED_R1_SUFFIX = config.get("fastq", {}).get("trimmed_r1_suffix", ".bbduk_R1_001.fastq.gz")
+TRIMMED_R2_SUFFIX = config.get("fastq", {}).get("trimmed_r2_suffix", ".bbduk_R2_001.fastq.gz")
+
+# --- Trimming ---
+TRIMMING_ENABLED = config.get("trimming", {}).get("enabled", False)
+TRIMMED_DIR = os.path.join(OUTPUT_DIR, "bbduk_trimmed")
 
 MERGED_SUFFIX = config.get("bam", {}).get("merged_suffix", ".merged.bam")
 DEDUP_SUFFIX = config.get("bam", {}).get("dedup_suffix", ".merged.dedup.bam")
@@ -54,6 +61,31 @@ def get_basenames_for_sample(sample):
     ].tolist()
 
 
+def _resolve_fastq_path(wildcards, suffix):
+    """Build FASTQ path respecting trimming mode and optional subfolder."""
+    row = samples_df.loc[wildcards.basename]
+    subfolder = row.get("subfolder", "") if "subfolder" in samples_df.columns else ""
+    if TRIMMING_ENABLED:
+        base_dir = TRIMMED_DIR
+    else:
+        base_dir = FASTQ_DIR
+    if subfolder:
+        return os.path.join(base_dir, str(subfolder), f"{wildcards.basename}{suffix}")
+    return os.path.join(base_dir, f"{wildcards.basename}{suffix}")
+
+
+def get_fastq_r1(wildcards):
+    """Return R1 FASTQ path - trimmed or raw depending on config."""
+    suffix = TRIMMED_R1_SUFFIX if TRIMMING_ENABLED else R1_SUFFIX
+    return _resolve_fastq_path(wildcards, suffix)
+
+
+def get_fastq_r2(wildcards):
+    """Return R2 FASTQ path - trimmed or raw depending on config."""
+    suffix = TRIMMED_R2_SUFFIX if TRIMMING_ENABLED else R2_SUFFIX
+    return _resolve_fastq_path(wildcards, suffix)
+
+
 # =============================================================================
 # Resource helpers
 # =============================================================================
@@ -71,5 +103,8 @@ def get_java_opts(wildcards, resources):
 # =============================================================================
 # Ensure output directories exist
 # =============================================================================
-for _d in [ALIGNED_DIR, MERGED_DIR, DEDUP_DIR, BQSR_DIR, LOG_DIR]:
+_dirs = [ALIGNED_DIR, MERGED_DIR, DEDUP_DIR, BQSR_DIR, LOG_DIR]
+if TRIMMING_ENABLED:
+    _dirs.append(TRIMMED_DIR)
+for _d in _dirs:
     os.makedirs(_d, exist_ok=True)
