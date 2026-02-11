@@ -1,0 +1,35 @@
+# =============================================================================
+# workflow/Snakefile — sm-alignment main entry point
+# =============================================================================
+# Usage:
+#   snakemake -s workflow/Snakefile --configfile config/config.yaml -n
+#   sbatch scripts/run_snakemake.sh workflow/Snakefile config/config.yaml
+# =============================================================================
+from snakemake.utils import validate
+
+
+configfile: "config/config.yaml"
+
+
+validate(config, "schemas/config.schema.yaml")
+
+samples_raw = __import__("pandas").read_table(config["paths"]["samples"])
+validate(samples_raw, "schemas/samples.schema.yaml")
+
+
+include: "rules/common.smk"
+include: "rules/alignment.smk"
+include: "rules/merge.smk"
+include: "rules/dedup.smk"
+include: "rules/bqsr.smk"
+
+
+ALL_SAMPLES = get_samples()
+
+
+rule all:
+    input:
+        expand(
+            os.path.join(BQSR_DIR, "{sample}" + FINAL_BAM_SUFFIX),
+            sample=ALL_SAMPLES,
+        ),
