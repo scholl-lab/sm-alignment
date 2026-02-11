@@ -20,3 +20,4 @@ required:
   - fastq_files_basename
   - lane
   - project_sample
+  - mdc_project

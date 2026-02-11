@@ -6,6 +6,7 @@ rule base_recalibration:
         recal_table=os.path.join(BQSR_DIR, "{sample}" + RECAL_TABLE_SUFFIX),
     params:
         java_opts=get_java_opts,
+        reference=REF,
         known_sites=lambda wc: " ".join(
             f'--known-sites "{ks}"' for ks in KNOWN_SITES
         ),
@@ -22,7 +23,7 @@ rule base_recalibration:
         gatk --java-options '{params.java_opts}' BaseRecalibrator \
             {params.extra} \
             -I "{input.dedup_bam}" \
-            -R "{REF}" \
+            -R "{params.reference}" \
             {params.known_sites} \
             -O "{output.recal_table}" \
             2> {log}
@@ -43,6 +44,7 @@ rule apply_bqsr:
             f" -Djava.io.tmpdir={resources.tmpdir}"
             f" -Dsamjdk.compression_level={COMPRESSION_LEVEL}"
         ),
+        reference=REF,
         extra=config.get("params", {}).get("gatk", {}).get("ApplyBQSR", ""),
     threads: 4
     resources:
@@ -55,6 +57,7 @@ rule apply_bqsr:
         r"""
         gatk --java-options '{params.java_opts}' ApplyBQSR \
             {params.extra} \
+            -R "{params.reference}" \
             -I "{input.dedup_bam}" \
             -bqsr "{input.recal_table}" \
             -O "{output.bqsr_bam}" \
