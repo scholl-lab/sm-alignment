@@ -32,7 +32,7 @@ rule all:
 rule samtools_view_apa_genes:
     input:
         bam_file = os.path.join(BAM_DIR, '{sample}.bam'),
-        bed_file = '_other/apa-genes.sorted.padding1000.bed'
+        bed_file = '/data/cephfs-1/work/groups/scholl/shared/target_files/apa_genes/hg38/apa_genes.genes2bed.GRCh38.S33266436_Regions.padding1000bp.bed'
     output:
         bam = os.path.join(OUTPUT_DIR, '{sample}.apa-genes.bam')
     log:

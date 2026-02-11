@@ -22,5 +22,5 @@ mkdir -p slurm_logs
 export SBATCH_DEFAULTS=" --output=slurm_logs/%x-%j.log"
 
 date
-srun snakemake -s subset_bam.smk --use-conda --profile=cubi-v1 -j20
+srun snakemake -s scripts/subset_bam.smk --use-conda --profile=cubi-v1 -j20
 date
