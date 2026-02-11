@@ -22,6 +22,8 @@ include: "rules/alignment.smk"
 include: "rules/merge.smk"
 include: "rules/dedup.smk"
 include: "rules/bqsr.smk"
+include: "rules/trim.smk"
+include: "rules/utilities.smk"
 
 
 ALL_SAMPLES = get_samples()
