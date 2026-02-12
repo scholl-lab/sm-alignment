@@ -17,6 +17,7 @@ Usage:
     python scripts/generate_config.py --fastq-dir /path/to/fastqs
     python scripts/generate_config.py --fastq-dir /path/to/fastqs --samplesheet SampleSheet.csv
     python scripts/generate_config.py --fastq-dir /path/to/fastqs --config-template --dry-run
+    python scripts/generate_config.py --fastq-dir /path/to/fastqs --config-template --output-dir /data/results
 """
 
 from __future__ import annotations
@@ -881,6 +882,7 @@ def generate_config_template(
     ref_data: dict[str, Any],
     dry_run: bool = False,
     force: bool = False,
+    output_dir: str | None = None,
 ) -> None:
     """Generate config.yaml with discovered reference paths.
 
@@ -892,9 +894,10 @@ def generate_config_template(
         ref_data: Discovered reference data from discover_reference_data().
         dry_run: If True, print content but do not write.
         force: If True, overwrite existing file without asking.
+        output_dir: Pipeline output directory (default: results/<project>).
     """
     fastq_folder = str(fastq_dir).replace("\\", "/")
-    output_folder = f"results/{project}"
+    output_folder = output_dir if output_dir else f"results/{project}"
 
     content = _build_config_yaml(ref_data, fastq_folder, output_folder, samples_path)
 
@@ -1064,8 +1067,15 @@ def interactive_mode() -> None:
 
     ref_dir: Path | None = None
     config_output = "config/config.yaml"
+    output_dir: str | None = None
     if gen_config:
         config_output = _prompt("Output config.yaml path", default="config/config.yaml")
+        default_output_dir = f"results/{project}"
+        output_dir_str = _prompt(
+            "Pipeline output directory (paths.output_folder)", default=default_output_dir
+        )
+        if output_dir_str != default_output_dir:
+            output_dir = output_dir_str
 
         # 6. Reference data
         print("\n  Reference data discovery")
@@ -1118,6 +1128,7 @@ def interactive_mode() -> None:
             ref_data=ref_data,
             dry_run=dry_run,
             force=force,
+            output_dir=output_dir,
         )
 
     print("\nDone.")
@@ -1153,6 +1164,11 @@ Examples:
         "--output",
         default="config/samples.tsv",
         help="Output samples.tsv path (default: config/samples.tsv)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        help="Pipeline output directory for BAM files etc. "
+        "(default: results/<project>). Written into paths.output_folder in config.yaml",
     )
     parser.add_argument(
         "--ref-dir",
@@ -1239,6 +1255,7 @@ Examples:
             ref_data=ref_data,
             dry_run=args.dry_run,
             force=args.force,
+            output_dir=args.output_dir,
         )
 
     print("\nDone.")
