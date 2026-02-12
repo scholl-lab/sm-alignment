@@ -13,7 +13,8 @@ flowchart LR
     DEDUP["GATK\nMarkDuplicates"]
     BQSR["GATK\nBQSR"]
     BAM["Analysis-ready\nBAM"]
-    FASTQC["FastQC"]
+    FQC_RAW["FastQC\nraw"]
+    FQC_TRIM["FastQC\ntrimmed"]
     QC["samtools stats\nPicard metrics\nQualimap"]
     MULTIQC["MultiQC\nreport"]
 
@@ -24,14 +25,18 @@ flowchart LR
     MERGE --> DEDUP
     DEDUP --> BQSR
     BQSR --> BAM
-    FASTQ -.-> FASTQC
+
+    FASTQ -.-> FQC_RAW
+    TRIM -.-> FQC_TRIM
     BAM -.-> QC
-    FASTQC -.-> MULTIQC
+    FQC_RAW -.-> MULTIQC
+    FQC_TRIM -.-> MULTIQC
     QC -.-> MULTIQC
     DEDUP -.->|dedup\nmetrics| MULTIQC
 
     style TRIM stroke-dasharray: 5 5
-    style FASTQC stroke-dasharray: 5 5
+    style FQC_RAW stroke-dasharray: 5 5
+    style FQC_TRIM stroke-dasharray: 5 5
     style QC stroke-dasharray: 5 5
     style MULTIQC stroke-dasharray: 5 5
 ```
