@@ -13,6 +13,9 @@ flowchart LR
     DEDUP["GATK\nMarkDuplicates"]
     BQSR["GATK\nBQSR"]
     BAM["Analysis-ready\nBAM"]
+    FASTQC["FastQC"]
+    QC["samtools stats\nPicard metrics\nQualimap"]
+    MULTIQC["MultiQC\nreport"]
 
     FASTQ --> TRIM
     TRIM -.->|trimming\nenabled| ALIGN
@@ -21,8 +24,16 @@ flowchart LR
     MERGE --> DEDUP
     DEDUP --> BQSR
     BQSR --> BAM
+    FASTQ -.-> FASTQC
+    BAM -.-> QC
+    FASTQC -.-> MULTIQC
+    QC -.-> MULTIQC
+    DEDUP -.->|dedup\nmetrics| MULTIQC
 
     style TRIM stroke-dasharray: 5 5
+    style FASTQC stroke-dasharray: 5 5
+    style QC stroke-dasharray: 5 5
+    style MULTIQC stroke-dasharray: 5 5
 ```
 
 ---
@@ -223,6 +234,7 @@ tail -f slurm_logs/slurm-*.log
 | `ref` | `genome`, `build`, `known_sites` (list of VCFs for BQSR) |
 | `paths` | `fastq_folder`, `output_folder`, `samples` (path to TSV) |
 | `trimming` | Set `enabled: true` to run BBDuk adapter trimming before alignment |
+| `qc` | Quality control: `enabled`, per-tool toggles (`fastqc`, `samtools_stats`, `samtools_flagstat`, `picard_collect_metrics`, `qualimap`) |
 | `params` | Extra CLI flags passed through to bwa, samtools, GATK tools |
 | `subset` | Optional BAM subsetting by BED regions |
 
@@ -267,9 +279,12 @@ Cluster-specific SLURM executor plugin settings. Used automatically when the lau
 
 | Conda env | Tools | Used by |
 |---|---|---|
-| `workflow/envs/bwa_samtools.yaml` | bwa 0.7.18, samtools 1.21, samblaster 0.1.26 | alignment, merge, utilities |
-| `workflow/envs/gatk.yaml` | gatk4 4.6.1.0, samtools 1.21 | dedup, BQSR |
+| `workflow/envs/bwa_samtools.yaml` | bwa 0.7.18, samtools 1.21, samblaster 0.1.26 | alignment, merge, utilities, samtools QC |
+| `workflow/envs/gatk.yaml` | gatk4 4.6.1.0, samtools 1.21 | dedup, BQSR, Picard metrics |
 | `workflow/envs/bbtools.yaml` | bbmap 39.06 | trimming |
+| `workflow/envs/fastqc.yaml` | fastqc 0.12.1 | FASTQ quality control |
+| `workflow/envs/multiqc.yaml` | multiqc 1.33 | QC report aggregation |
+| `workflow/envs/qualimap.yaml` | qualimap 2.3 | alignment coverage analysis (opt-in) |
 
 Conda environments are created automatically by Snakemake on first run (`software-deployment-method: conda` in the workflow profile).
 
@@ -299,6 +314,51 @@ Then comment out `software-deployment-method` in `profiles/default/config.yaml` 
 
 ```bash
 sbatch scripts/run_snakemake.sh workflow/Snakefile config/config.yaml --sdm none
+```
+
+---
+
+## Quality Control
+
+QC runs automatically alongside the main pipeline (controlled by `qc.enabled` in config). The final output is a single MultiQC HTML report aggregating all metrics.
+
+### What gets collected
+
+| Tool | Runs on | Metrics |
+|------|---------|---------|
+| **FastQC** | Raw FASTQs (+ trimmed if enabled) | Per-base quality, adapter content, GC distribution, overrepresented sequences |
+| **samtools stats** | Final BAM | Error rate per cycle, base composition, insert size, indel distribution |
+| **samtools flagstat** | Final BAM | Total/mapped/paired/duplicate read counts |
+| **Picard CollectMultipleMetrics** | Final BAM | Alignment summary, insert size, GC bias, quality by cycle, sequencing artifacts |
+| **Picard MarkDuplicates** | (already produced) | Duplication rate, optical duplicates |
+| **Qualimap** (opt-in) | Final BAM | Coverage distribution, mean depth, mapping quality distribution |
+
+### Configuration
+
+```yaml
+qc:
+  enabled: true                 # master switch
+  fastqc: true                  # FastQC on FASTQs
+  samtools_stats: true          # samtools stats on final BAM
+  samtools_flagstat: true       # samtools flagstat on final BAM
+  picard_collect_metrics: true  # Picard CollectMultipleMetrics
+  qualimap: false               # opt-in (requires ~16 GB RAM on GRCh38)
+  qualimap_feature_file: ""     # BED for exome on-target stats
+```
+
+Set `qc.enabled: false` to skip all QC and produce only BAM files (pipeline behaves exactly as before).
+
+### Output
+
+```
+{output_folder}/qc/
+├── fastqc/raw/          # FastQC reports per FASTQ file
+├── fastqc/trimmed/      # (when trimming enabled)
+├── samtools/            # *.stats.txt, *.flagstat.txt
+├── picard/              # CollectMultipleMetrics output files
+├── qualimap/            # (when qc.qualimap: true)
+├── multiqc_report.html  # ← aggregated report
+└── multiqc_data/
 ```
 
 ---

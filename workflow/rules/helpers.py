@@ -37,6 +37,18 @@ def get_samples(samples_df) -> list[str]:
     return sorted(samples_df["project_sample"].unique().tolist())
 
 
+def get_all_basenames(samples_df) -> list[str]:
+    """Return sorted list of all FASTQ basenames from metadata.
+
+    Args:
+        samples_df: DataFrame with a 'fastq_files_basename' column.
+
+    Returns:
+        Sorted list of all FASTQ basenames.
+    """
+    return sorted(samples_df["fastq_files_basename"].unique().tolist())
+
+
 def get_basenames_for_sample(samples_df, sample: str) -> list[str]:
     """Return all FASTQ basenames belonging to a given sample.
 

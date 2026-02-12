@@ -12,6 +12,7 @@ import pytest
 # Add workflow/rules to path so we can import helpers directly
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "workflow" / "rules"))
 from helpers import (
+    get_all_basenames,
     get_basenames_for_sample,
     get_java_opts,
     get_samples,
@@ -93,6 +94,39 @@ class TestGetSamples:
         )
         result = get_samples(df)
         assert result == ["Alpha", "Zebra"]
+
+
+# ============================================================================
+# TestGetAllBasenames
+# ============================================================================
+
+
+class TestGetAllBasenames:
+    """Tests for get_all_basenames()."""
+
+    def test_returns_all_sorted(self, samples_df):
+        result = get_all_basenames(samples_df)
+        assert result == ["SampleA_S1_L001", "SampleA_S1_L002", "SampleB_S2_L001"]
+
+    def test_single_entry(self):
+        df = pd.DataFrame(
+            {
+                "fastq_files_basename": ["X_S1_L001"],
+                "project_sample": ["OnlySample"],
+            }
+        )
+        result = get_all_basenames(df)
+        assert result == ["X_S1_L001"]
+
+    def test_no_duplicates(self):
+        df = pd.DataFrame(
+            {
+                "fastq_files_basename": ["A_S1_L001", "A_S1_L001", "B_S2_L001"],
+                "project_sample": ["A", "A", "B"],
+            }
+        )
+        result = get_all_basenames(df)
+        assert result == ["A_S1_L001", "B_S2_L001"]
 
 
 # ============================================================================

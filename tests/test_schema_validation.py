@@ -92,6 +92,39 @@ class TestConfigSchema:
         cfg = _load_yaml(repo_config)
         snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
 
+    def test_qc_defaults_valid(self, valid_config):
+        """QC section is optional — config without it should pass."""
+        cfg = copy.deepcopy(valid_config)
+        cfg.pop("qc", None)
+        snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
+    def test_qc_all_flags(self, valid_config):
+        """QC section with all flags set should pass."""
+        cfg = copy.deepcopy(valid_config)
+        cfg["qc"] = {
+            "enabled": True,
+            "fastqc": True,
+            "samtools_stats": True,
+            "samtools_flagstat": True,
+            "picard_collect_metrics": True,
+            "qualimap": False,
+            "qualimap_feature_file": "",
+        }
+        snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
+    def test_qc_disabled(self, valid_config):
+        """QC disabled should pass."""
+        cfg = copy.deepcopy(valid_config)
+        cfg["qc"] = {"enabled": False}
+        snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
+    def test_qc_invalid_type(self, valid_config):
+        """String where boolean expected should fail."""
+        cfg = copy.deepcopy(valid_config)
+        cfg["qc"] = {"enabled": "yes"}
+        with pytest.raises(_SchemaError):
+            snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
 
 # ============================================================================
 # Samples schema tests

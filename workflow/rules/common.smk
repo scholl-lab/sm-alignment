@@ -3,6 +3,7 @@ import pandas as pd
 from rules.helpers import (
     get_java_opts as _get_java_opts_impl,
     get_samples as _get_samples_impl,
+    get_all_basenames as _get_all_basenames_impl,
     get_basenames_for_sample as _get_basenames_impl,
     resolve_fastq_path as _resolve_fastq_path_impl,
 )
@@ -50,6 +51,11 @@ MERGED_DIR = os.path.join(OUTPUT_DIR, "merged")
 DEDUP_DIR = os.path.join(OUTPUT_DIR, "dedup")
 BQSR_DIR = os.path.join(OUTPUT_DIR, "bqsr")
 
+# --- Quality control ---
+QC_CFG = config.get("qc", {})
+QC_ENABLED = QC_CFG.get("enabled", True)
+QC_DIR = os.path.join(OUTPUT_DIR, "qc")
+
 
 # =============================================================================
 # Samples metadata
@@ -62,6 +68,11 @@ samples_df = pd.read_table(config["paths"]["samples"]).set_index(
 def get_samples():
     """Return sorted list of unique sample names from metadata."""
     return _get_samples_impl(samples_df)
+
+
+def get_all_basenames():
+    """Return sorted list of all FASTQ basenames from metadata."""
+    return _get_all_basenames_impl(samples_df)
 
 
 def get_basenames_for_sample(sample):

@@ -39,6 +39,14 @@ set-threads:
   subset_bam: 1
   align_and_sort: 8
   index_bam: 1
+  # QC rules
+  fastqc_raw: 1
+  fastqc_trimmed: 1
+  samtools_stats: 1
+  samtools_flagstat: 1
+  picard_collect_multiple_metrics: 1
+  qualimap_bamqc: 4
+  multiqc: 1
 
 # --- Per-rule resource overrides ---
 # cpus_per_task mirrors set-threads as a workaround for
@@ -83,4 +91,33 @@ set-resources:
   index_bam:
     mem_mb: 4000
     runtime: 120
+    cpus_per_task: 1
+  # QC rules
+  fastqc_raw:
+    mem_mb: 1024
+    runtime: 60
+    cpus_per_task: 1
+  fastqc_trimmed:
+    mem_mb: 1024
+    runtime: 60
+    cpus_per_task: 1
+  samtools_stats:
+    mem_mb: 4000
+    runtime: 120
+    cpus_per_task: 1
+  samtools_flagstat:
+    mem_mb: 2000
+    runtime: 30
+    cpus_per_task: 1
+  picard_collect_multiple_metrics:
+    mem_mb: 8000
+    runtime: 720
+    cpus_per_task: 1
+  qualimap_bamqc:
+    mem_mb: 16384
+    runtime: 720
+    cpus_per_task: 4
+  multiqc:
+    mem_mb: 4000
+    runtime: 60
     cpus_per_task: 1

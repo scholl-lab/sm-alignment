@@ -180,6 +180,38 @@ properties:
         type: string
         default: "0,10,20,30,40,50,60"
 
+  qc:
+    type: object
+    properties:
+      enabled:
+        type: boolean
+        default: true
+        description: Master switch for all QC rules
+      fastqc:
+        type: boolean
+        default: true
+        description: Run FastQC on raw (and trimmed) FASTQs
+      samtools_stats:
+        type: boolean
+        default: true
+        description: Run samtools stats on final BAM
+      samtools_flagstat:
+        type: boolean
+        default: true
+        description: Run samtools flagstat on final BAM
+      picard_collect_metrics:
+        type: boolean
+        default: true
+        description: Run Picard CollectMultipleMetrics on final BAM
+      qualimap:
+        type: boolean
+        default: false
+        description: Run Qualimap bamqc (opt-in, high memory on GRCh38)
+      qualimap_feature_file:
+        type: string
+        default: ""
+        description: BED file for Qualimap exome on-target stats
+
   subset:
     type: object
     properties:

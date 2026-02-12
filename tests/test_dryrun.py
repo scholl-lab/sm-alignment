@@ -96,3 +96,18 @@ class TestDryRun:
         invalid_config = REPO_ROOT / "tests" / "data" / "config" / "config_invalid_build.yaml"
         result = _run_snakemake(config=invalid_config)
         assert result.returncode != 0
+
+    def test_qc_rules_listed(self):
+        """QC rules should be listed when qc.enabled is true (default)."""
+        result = _run_snakemake("--list-rules", dry_run=False)
+        assert result.returncode == 0, result.stderr
+        for rule in (
+            "fastqc_raw",
+            "fastqc_trimmed",
+            "samtools_stats",
+            "samtools_flagstat",
+            "picard_collect_multiple_metrics",
+            "qualimap_bamqc",
+            "multiqc",
+        ):
+            assert rule in result.stdout, f"Expected QC rule '{rule}' not in --list-rules output"

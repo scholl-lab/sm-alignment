@@ -24,6 +24,7 @@ include: "rules/dedup.smk"
 include: "rules/bqsr.smk"
 include: "rules/trim.smk"
 include: "rules/utilities.smk"
+include: "rules/qc.smk"
 
 
 ALL_SAMPLES = get_samples()
@@ -35,3 +36,4 @@ rule all:
             os.path.join(BQSR_DIR, "{sample}" + FINAL_BAM_SUFFIX),
             sample=ALL_SAMPLES,
         ),
+        ([os.path.join(QC_DIR, "multiqc_report.html")] if QC_ENABLED else []),
