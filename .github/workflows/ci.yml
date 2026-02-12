@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint & typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linting tools
+        run: pip install ruff mypy snakefmt shellcheck-py
+
+      - name: Ruff lint
+        run: ruff check scripts/generate_config.py workflow/rules/helpers.py
+
+      - name: Ruff format check
+        run: ruff format --check scripts/generate_config.py workflow/rules/helpers.py
+
+      - name: Mypy
+        run: mypy scripts/generate_config.py workflow/rules/helpers.py
+
+      - name: Snakefmt check
+        run: snakefmt --check workflow/rules/*.smk workflow/Snakefile
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install pytest pandas pyyaml
+
+      - name: Run unit tests
+        run: pytest -m "not dryrun"

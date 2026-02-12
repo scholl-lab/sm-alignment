@@ -12,6 +12,7 @@
 latency-wait: 60
 jobs: 20
 rerun-incomplete: true
+retries: 2
 printshellcmds: true
 
 # --- Software deployment ---
