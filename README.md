@@ -2,26 +2,47 @@
 
 Snakemake pipeline for DNA sequence alignment and BAM processing on SLURM HPC clusters.
 
-**FASTQ → (BBDuk trim) → BWA → merge lanes → MarkDuplicates → BQSR → analysis-ready BAM**
+Designed for SLURM HPC clusters with automatic cluster detection.
 
-Supports both **BIH HPC** (`cubi-v1` profile) and **Charité HPC** (auto-detected).
+```mermaid
+flowchart LR
+    FASTQ["Paired-end\nFASTQ files"]
+    TRIM["BBDuk\ntrim"]
+    ALIGN["BWA MEM\nalign"]
+    MERGE["samtools merge\nper sample"]
+    DEDUP["GATK\nMarkDuplicates"]
+    BQSR["GATK\nBQSR"]
+    BAM["Analysis-ready\nBAM"]
+
+    FASTQ --> TRIM
+    TRIM -.->|trimming\nenabled| ALIGN
+    FASTQ -->|per lane| ALIGN
+    ALIGN --> MERGE
+    MERGE --> DEDUP
+    DEDUP --> BQSR
+    BQSR --> BAM
+
+    style TRIM stroke-dasharray: 5 5
+```
 
 ---
 
 ## Setup
 
-### 1. Clone into your project directory
+### Prerequisites
 
-The pipeline should live inside each project's directory on the cluster, not in your home directory (quota is too small for results).
+You need **Snakemake 8+** and **conda/mamba**. Install via [Miniforge](https://github.com/conda-forge/miniforge) (do not use Anaconda):
 
 ```bash
-# Charité HPC
-cd /sc-projects/<your-project>
-git clone https://github.com/scholl-lab/sm-alignment.git
-cd sm-alignment
+mamba create -n snakemake -y -c conda-forge -c bioconda python=3.11 snakemake=8
+conda activate snakemake
+```
 
-# BIH HPC
-cd /data/cephfs-1/work/projects/<your-project>
+Pipeline tools (BWA, GATK, samtools, BBDuk) are installed automatically as per-rule conda environments on first run — no manual tool installation needed. See [Software Deployment](#software-deployment) for alternatives.
+
+### 1. Clone the repository
+
+```bash
 git clone https://github.com/scholl-lab/sm-alignment.git
 cd sm-alignment
 ```
@@ -29,7 +50,7 @@ cd sm-alignment
 Recommended project layout:
 
 ```
-/sc-projects/<your-project>/         # or /data/.../projects/<your-project>/
+<your-project>/
 ├── sm-alignment/                    # this pipeline (git clone)
 │   ├── workflow/
 │   ├── config/
@@ -45,21 +66,16 @@ Recommended project layout:
 
 ### 2. Set up reference data
 
-Follow the [lab handbook: Reference Data Setup](https://github.com/scholl-lab/lab-handbook/blob/main/docs/reference-data-setup.md) to download the reference genome and GATK known-sites.
+The pipeline requires a reference genome and known-sites VCFs for base quality score recalibration (BQSR):
 
-**BIH HPC** — shared data already exists:
+| Data | Source | Maps to `config.yaml` |
+|------|--------|-----------------------|
+| **GRCh38 no-alt analysis set** (FASTA + BWA index + .fai + .dict) | [NCBI FTP](https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/) | `ref.genome` |
+| **dbSNP 138** | [Google Cloud — Broad references](https://console.cloud.google.com/storage/browser/gcp-public-data--broad-references/hg38/v0) | `ref.known_sites[]` |
+| **Known indels** | same bucket | `ref.known_sites[]` |
+| **Mills & 1000G gold-standard indels** | same bucket | `ref.known_sites[]` |
 
-```
-/data/cephfs-1/work/groups/scholl/shared/ref/GRCh38/
-/data/cephfs-1/work/projects/apa-sequencing/analysis/GATK_resource_bundle/
-```
-
-**Charité HPC** — set up per project:
-
-```
-/sc-projects/<your-project>/resources/ref/GRCh38/
-/sc-projects/<your-project>/resources/gatk_bundle/hg38/
-```
+Download the files and place them under `resources/` as shown in the project layout above. Then point `config/config.yaml` at the paths, or use `generate_config.py --config-template` to auto-detect them (see [Generate Config Files](#generate-config-files)).
 
 ---
 
@@ -82,7 +98,7 @@ When you receive FASTQ files with a `SampleSheet.csv` from the core facility:
 ```bash
 # Generate samples.tsv from the delivery folder
 python scripts/generate_config.py \
-    --fastq-dir /path/to/250903_LH00253_0332_B232J72LT4_A5297_FASTQ/
+    --fastq-dir /path/to/delivery_folder/
 
 # Output:
 #   Found SampleSheet.csv with 2 samples
@@ -90,7 +106,7 @@ python scripts/generate_config.py \
 #   Written: config/samples.tsv (2 samples)
 ```
 
-The script auto-detects `SampleSheet.csv` in the FASTQ directory, parses Illumina filenames, and generates `config/samples.tsv`. It handles both standard Illumina `[Data]` format and the BIH/Charité minimal CSV format.
+The script auto-detects `SampleSheet.csv` in the FASTQ directory, parses Illumina filenames, and generates `config/samples.tsv`. It handles both standard Illumina `[Data]` format and minimal CSV formats.
 
 **Options:**
 
@@ -103,10 +119,10 @@ python scripts/generate_config.py --fastq-dir /path/to/fastqs --config-template
 
 # Point to a specific reference data directory
 python scripts/generate_config.py --fastq-dir /path/to/fastqs --config-template \
-    --ref-dir /sc-projects/<project>/resources/ref/GRCh38
+    --ref-dir /path/to/resources/ref/GRCh38
 
 # Override project name
-python scripts/generate_config.py --fastq-dir /path/to/fastqs --project A5297
+python scripts/generate_config.py --fastq-dir /path/to/fastqs --project MyProject
 
 # Overwrite existing files
 python scripts/generate_config.py --fastq-dir /path/to/fastqs --force
@@ -116,7 +132,6 @@ When `--config-template` is used, the script scans for reference data:
 
 1. **Explicit** `--ref-dir` (if provided)
 2. **Relative** paths near the FASTQ directory (`resources/ref/GRCh38/`, `resources/gatk_bundle/hg38/`, etc.)
-3. **Shared BIH HPC** locations (`/data/cephfs-1/work/groups/scholl/shared/ref/GRCh38/`)
 
 It checks for companion files (BWA index, FAI, dict, tabix index) and reports what it finds. Discovered paths are written directly into `config/config.yaml`. Any paths not found are marked with `EDIT_ME:` placeholders.
 
@@ -126,15 +141,15 @@ After generating, review the config and adjust paths if needed:
 
 ```yaml
 ref:
-  genome: "/sc-projects/<project>/resources/ref/GRCh38/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna"
+  genome: "/path/to/resources/ref/GRCh38/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna"
   known_sites:
-    - "/sc-projects/<project>/resources/gatk_bundle/hg38/Homo_sapiens_assembly38.dbsnp138.vcf"
-    - "/sc-projects/<project>/resources/gatk_bundle/hg38/Homo_sapiens_assembly38.known_indels.vcf.gz"
-    - "/sc-projects/<project>/resources/gatk_bundle/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"
+    - "/path/to/resources/gatk_bundle/hg38/Homo_sapiens_assembly38.dbsnp138.vcf"
+    - "/path/to/resources/gatk_bundle/hg38/Homo_sapiens_assembly38.known_indels.vcf.gz"
+    - "/path/to/resources/gatk_bundle/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"
 
 paths:
   fastq_folder: "/path/to/your/fastq/directory"   # auto-filled from --fastq-dir
-  output_folder: "results/A5297"                   # auto-filled from project name
+  output_folder: "results/MyProject"               # auto-filled from project name
 
 trimming:
   enabled: false    # set to true to auto-trim before alignment
@@ -149,7 +164,7 @@ trimming:
 Always verify the execution plan before submitting:
 
 ```bash
-# On a compute node (Charité) or login node (BIH)
+# On a compute or login node
 conda activate snakemake
 
 snakemake -s workflow/Snakefile --configfile config/config.yaml -n
@@ -165,13 +180,7 @@ mkdir -p slurm_logs
 sbatch scripts/run_snakemake.sh workflow/Snakefile
 ```
 
-The launcher auto-detects whether you're on BIH HPC or Charité HPC:
-
-| Cluster | Detection | Behavior |
-|---------|-----------|----------|
-| **BIH HPC** | `cubi-v1` profile exists | Uses `--profile=cubi-v1` for job submission |
-| **Charité HPC** | `/etc/profile.d/conda.sh` exists | Uses SLURM executor plugin (`profiles/charite`), sources conda automatically |
-| **Other/local** | Fallback | Runs without cluster submission |
+The launcher auto-detects your cluster environment and selects the appropriate SLURM submission method. If no known cluster is detected, it falls back to local execution.
 
 ### Usage examples
 
@@ -219,23 +228,38 @@ tail -f slurm_logs/slurm-*.log
 
 ### `config/samples.tsv`
 
-One row per FASTQ pair (per lane):
+One row per FASTQ pair (per lane). Samples sequenced across multiple lanes have multiple rows — the pipeline aligns each lane independently and merges by `project_sample`.
 
-| Column | Example | Description |
-|---|---|---|
-| `fastq_files_basename` | `A5297_DNA_01_STREAM_P1_L1_S1_L008` | FASTQ filename prefix (before `_R1_001.fastq.gz`) |
-| `lane` | `L008` | Sequencing lane (used for read groups) |
-| `project_sample` | `A5297_DNA_01_STREAM_P1_L1` | Sample name (lane BAMs are merged by this) |
-| `mdc_project` | `A5297` | Project identifier (read group PU tag) |
-| `subfolder` | `run1` | *(optional)* Subdirectory within FASTQ folder |
+| Column | Example | Required | Description |
+|---|---|---|---|
+| `fastq_files_basename` | `Sample1_S1_L001` | yes | FASTQ filename prefix (before `_R1_001.fastq.gz`). Must be unique — used as index. |
+| `lane` | `L001` | yes | Sequencing lane. Used in the read group ID (`@RG ID:{lane}-{sample}`) and PU tag. |
+| `project_sample` | `Sample1` | yes | Logical sample name. All rows sharing this value are merged into one BAM after alignment. |
+| `mdc_project` | `ProjectX` | yes | Project identifier. Used in the read group PU tag (`PU:{lane}-{project}`). |
+| `subfolder` | `run1` | no | Subdirectory within the FASTQ folder, for deliveries split across sub-directories. |
+
+**Multi-lane example** — one sample sequenced on two lanes produces two rows:
+
+```tsv
+fastq_files_basename	lane	project_sample	mdc_project
+Sample1_S1_L001	L001	Sample1	ProjectX
+Sample1_S1_L002	L002	Sample1	ProjectX
+```
+
+This generates two lane-level BAMs that are merged into a single `Sample1.bam` before deduplication.
+
+**Generating `samples.tsv`:**
+
+- **Automatic** (recommended): `python scripts/generate_config.py --fastq-dir /path/to/fastqs` parses the Illumina `SampleSheet.csv` and FASTQ filenames. Run with `--help` for all options, or without arguments for the interactive wizard.
+- **Manual**: create a tab-separated file with the columns above. Ensure `fastq_files_basename` matches the actual FASTQ filenames in your `paths.fastq_folder` directory.
 
 ### `profiles/default/config.yaml`
 
-Per-rule resource allocation (threads, memory, walltime). Adjust for your cluster without touching workflow code. Runtimes are capped at 2880 min (48h) for Charité compatibility.
+Per-rule resource allocation (threads, memory, walltime). Adjust for your cluster without touching workflow code.
 
 ### `profiles/charite/config.yaml`
 
-Charité-specific SLURM submission settings. Used automatically when the launcher detects the Charité cluster.
+Cluster-specific SLURM executor plugin settings. Used automatically when the launcher detects a matching cluster.
 
 ---
 
