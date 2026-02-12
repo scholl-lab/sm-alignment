@@ -75,7 +75,7 @@ The pipeline requires a reference genome and known-sites VCFs for base quality s
 | **Known indels** | same bucket | `ref.known_sites[]` |
 | **Mills & 1000G gold-standard indels** | same bucket | `ref.known_sites[]` |
 
-Download the files and place them under `resources/` as shown in the project layout above. Then point `config.yaml` at the paths, or use `generate_config.py --config-template` to auto-detect them (see [Generate Config Files](#generate-config-files)).
+Download the files and place them under `resources/` as shown in the project layout above. Then point `config/config.yaml` at the paths, or use `generate_config.py --config-template` to auto-detect them (see [Generate Config Files](#generate-config-files)).
 
 ---
 

@@ -21,10 +21,10 @@ jobs:
         run: pip install ruff mypy snakefmt==0.10.3 shellcheck-py
 
       - name: Ruff lint
-        run: ruff check scripts/generate_config.py workflow/rules/helpers.py
+        run: ruff check scripts workflow/rules tests
 
       - name: Ruff format check
-        run: ruff format --check scripts/generate_config.py workflow/rules/helpers.py
+        run: ruff format --check scripts workflow/rules tests
 
       - name: Mypy
         run: mypy scripts/generate_config.py workflow/rules/helpers.py
