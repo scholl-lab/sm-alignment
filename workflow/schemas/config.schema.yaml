@@ -185,7 +185,7 @@ properties:
     properties:
       enabled:
         type: boolean
-        default: true
+        default: false
         description: Master switch for all QC rules
       fastqc:
         type: boolean

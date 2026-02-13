@@ -46,6 +46,9 @@ params:
 trimming:
   enabled: false
 
+qc:
+  enabled: true
+
 subset:
   bed_file: ""
   output_suffix: ".subset.bam"

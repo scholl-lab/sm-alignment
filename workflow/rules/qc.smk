@@ -25,12 +25,18 @@ _PICARD_PREFIX = os.path.join(PICARD_QC_DIR, "{sample}.multiple_metrics")
 
 # -----------------------------------------------------------------------------
 # FastQC helpers — build a lookup from output stem to source FASTQ path.
-# FastQC names outputs by stripping .fastq.gz from the input filename,
-# so we precompute exact output stems from the configured suffixes.
+# FastQC names outputs by stripping compression/FASTQ extensions from the
+# input filename, so we precompute exact output stems from the configured
+# suffixes.  Handle .fastq.gz, .fq.gz, .fastq, .fq (and bare .gz fallback).
 # -----------------------------------------------------------------------------
 def _fastqc_stem(suffix):
-    """Strip .fastq.gz to get the filename stem FastQC will use."""
-    return suffix.replace(".fastq.gz", "")
+    """Return the filename stem FastQC will use for a given FASTQ suffix."""
+    for ext in (".fastq.gz", ".fq.gz", ".fastq", ".fq"):
+        if suffix.endswith(ext):
+            return suffix[: -len(ext)]
+    if suffix.endswith(".gz"):
+        return suffix[: -len(".gz")]
+    return suffix
 
 
 _RAW_R1_STEM = _fastqc_stem(R1_SUFFIX)  # e.g. "_R1_001"
@@ -88,10 +94,20 @@ rule fastqc_raw:
 # =============================================================================
 # FastQC — trimmed FASTQs (only when trimming is enabled)
 # =============================================================================
+def _get_trimmed_fastq(wildcards):
+    """Resolve trimmed FASTQ path; raise a clear error when trimming is off."""
+    if not TRIMMING_ENABLED:
+        raise ValueError(
+            f"fastqc_trimmed requested for '{wildcards.fq_stem}' but "
+            "trimming.enabled is false in config.yaml"
+        )
+    return _FASTQC_TRIMMED_LOOKUP[wildcards.fq_stem]
+
+
 rule fastqc_trimmed:
     """Run FastQC on a trimmed FASTQ file."""
     input:
-        lambda wc: _FASTQC_TRIMMED_LOOKUP[wc.fq_stem],
+        _get_trimmed_fastq,
     output:
         html=os.path.join(FASTQC_TRIMMED_DIR, "{fq_stem}_fastqc.html"),
         zip=os.path.join(FASTQC_TRIMMED_DIR, "{fq_stem}_fastqc.zip"),

@@ -98,7 +98,7 @@ class TestDryRun:
         assert result.returncode != 0
 
     def test_qc_rules_listed(self):
-        """QC rules should be listed when qc.enabled is true (default)."""
+        """QC rules should be listed when qc.enabled is true."""
         result = _run_snakemake("--list-rules", dry_run=False)
         assert result.returncode == 0, result.stderr
         for rule in (

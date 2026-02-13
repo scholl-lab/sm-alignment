@@ -53,7 +53,7 @@ BQSR_DIR = os.path.join(OUTPUT_DIR, "bqsr")
 
 # --- Quality control ---
 QC_CFG = config.get("qc", {})
-QC_ENABLED = QC_CFG.get("enabled", True)
+QC_ENABLED = QC_CFG.get("enabled", False)
 QC_DIR = os.path.join(OUTPUT_DIR, "qc")
 
 
