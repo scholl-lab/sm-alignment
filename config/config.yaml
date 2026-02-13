@@ -74,6 +74,16 @@ trimming:
   ziplevel: 5
   quantize: "0,10,20,30,40,50,60"
 
+# --- Quality control ---
+qc:
+  enabled: true                 # master switch — set false to skip all QC
+  fastqc: true                  # FastQC on raw (+ trimmed if trimming.enabled)
+  samtools_stats: true          # samtools stats on final BAM
+  samtools_flagstat: true       # samtools flagstat on final BAM
+  picard_collect_metrics: true  # Picard CollectMultipleMetrics on final BAM
+  qualimap: false               # Qualimap bamqc — opt-in (high memory on GRCh38)
+  qualimap_feature_file: ""     # BED file for Qualimap exome on-target stats
+
 # --- Subset BAM (optional) ---
 subset:
   bed_file: ""
