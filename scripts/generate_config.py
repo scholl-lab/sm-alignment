@@ -18,6 +18,7 @@ Usage:
     python scripts/generate_config.py --fastq-dir /path/to/fastqs --samplesheet SampleSheet.csv
     python scripts/generate_config.py --fastq-dir /path/to/fastqs --config-template --dry-run
     python scripts/generate_config.py --fastq-dir /path/to/fastqs --config-template --output-dir /data/results
+    python scripts/generate_config.py --fastq-dir /path/to/fastqs --config-template --enable-trimming
 """
 
 from __future__ import annotations
@@ -773,6 +774,7 @@ def _build_config_yaml(
     fastq_folder: str,
     output_folder: str,
     samples_path: str,
+    enable_trimming: bool = False,
 ) -> str:
     """Build config.yaml content from discovered reference data and paths."""
     genome = ref_data.get("genome", "") or "EDIT_ME: /path/to/reference.fna"
@@ -851,7 +853,7 @@ params:
 
 # --- BBDuk trimming parameters ---
 trimming:
-  enabled: false
+  enabled: {"true" if enable_trimming else "false"}
   bbduk_ref: "adapters,artifacts"
   ktrim: "r"
   k: 23
@@ -883,6 +885,7 @@ def generate_config_template(
     dry_run: bool = False,
     force: bool = False,
     output_dir: str | None = None,
+    enable_trimming: bool = False,
 ) -> None:
     """Generate config.yaml with discovered reference paths.
 
@@ -895,11 +898,14 @@ def generate_config_template(
         dry_run: If True, print content but do not write.
         force: If True, overwrite existing file without asking.
         output_dir: Pipeline output directory (default: results/<project>).
+        enable_trimming: If True, set trimming.enabled to true in the config.
     """
     fastq_folder = str(fastq_dir).replace("\\", "/")
     output_folder = output_dir if output_dir else f"results/{project}"
 
-    content = _build_config_yaml(ref_data, fastq_folder, output_folder, samples_path)
+    content = _build_config_yaml(
+        ref_data, fastq_folder, output_folder, samples_path, enable_trimming
+    )
 
     if dry_run:
         print(f"\n--- Config template ({config_output}) ---")
@@ -1087,7 +1093,15 @@ def interactive_mode() -> None:
         if custom_ref:
             ref_dir = Path(custom_ref).resolve()
 
-    # 7. Dry-run or write?
+    # 7. Trimming
+    enable_trimming = False
+    if gen_config:
+        print("\n  Adapter trimming (BBDuk)")
+        print("  Recommended for FFPE samples or when short fragment sizes are expected.")
+        print("  Can be safely disabled for high-quality fresh/frozen DNA.")
+        enable_trimming = _prompt_yn("  Enable adapter trimming?", default=False)
+
+    # 8. Dry-run or write?
     dry_run = not _prompt_yn("\nWrite files now?", default=True)
     force = False
     if not dry_run:
@@ -1129,6 +1143,7 @@ def interactive_mode() -> None:
             dry_run=dry_run,
             force=force,
             output_dir=output_dir,
+            enable_trimming=enable_trimming,
         )
 
     print("\nDone.")
@@ -1184,6 +1199,13 @@ Examples:
         "--config-output",
         default="config/config.yaml",
         help="Output config.yaml path (default: config/config.yaml)",
+    )
+    parser.add_argument(
+        "--enable-trimming",
+        action="store_true",
+        default=False,
+        help="Enable BBDuk adapter/quality trimming in the generated config "
+        "(recommended for FFPE samples)",
     )
     parser.add_argument(
         "--dry-run",
@@ -1256,6 +1278,7 @@ Examples:
             dry_run=args.dry_run,
             force=args.force,
             output_dir=args.output_dir,
+            enable_trimming=args.enable_trimming,
         )
 
     print("\nDone.")

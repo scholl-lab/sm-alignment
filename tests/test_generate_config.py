@@ -608,7 +608,7 @@ class TestBuildConfigYaml:
         result = gc._build_config_yaml(ref_data, "/fastqs", "/output", "samples.tsv")
         assert "EDIT_ME" in result
 
-    def test_trimming_section(self):
+    def test_trimming_disabled_by_default(self):
         ref_data = {
             "genome": "/ref.fna",
             "genome_gz": "",
@@ -618,6 +618,20 @@ class TestBuildConfigYaml:
         result = gc._build_config_yaml(ref_data, "/fastqs", "/output", "samples.tsv")
         assert "trimming:" in result
         assert "enabled: false" in result
+
+    def test_trimming_enabled(self):
+        ref_data = {
+            "genome": "/ref.fna",
+            "genome_gz": "",
+            "build": "GRCh38",
+            "known_sites": ["/ks.vcf.gz"],
+        }
+        result = gc._build_config_yaml(
+            ref_data, "/fastqs", "/output", "samples.tsv", enable_trimming=True
+        )
+        assert "trimming:" in result
+        assert "enabled: true" in result
+        assert "enabled: false" not in result
 
     def test_edit_me_not_resolved(self):
         """EDIT_ME placeholders should not be resolved by _resolve_path."""
