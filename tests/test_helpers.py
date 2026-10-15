@@ -16,6 +16,7 @@ from helpers import (
     get_all_basenames,
     get_basenames_for_sample,
     get_java_opts,
+    get_sample_kit,
     get_samples,
     load_samples,
     resolve_fastq_path,
@@ -304,3 +305,24 @@ class TestLoadSamples:
         )
         with pytest.raises(ValueError, match="path separators"):
             load_samples(tsv)
+
+    def test_kit_per_sample_and_conflict_rejected(self, tmp_path):
+        tsv = tmp_path / "samples.tsv"
+        tsv.write_text(
+            "fastq_files_basename\tlane\tproject_sample\tmdc_project\tkit\n"
+            "S1_L001\tL001\tSampleA\tProj\tS33266340\n"
+            "S1_L002\tL002\tSampleA\tProj\tS33266340\n"
+            "S2_L001\tL001\tSampleB\tProj\tS33266436\n"
+        )
+        df = load_samples(tsv)
+        assert get_sample_kit(df, "SampleA") == "S33266340"
+        assert get_sample_kit(df, "SampleB") == "S33266436"
+
+        bad_tsv = tmp_path / "bad_samples.tsv"
+        bad_tsv.write_text(
+            "fastq_files_basename\tlane\tproject_sample\tmdc_project\tkit\n"
+            "S1_L001\tL001\tSampleA\tProj\tS33266340\n"
+            "S1_L002\tL002\tSampleA\tProj\tS33266436\n"
+        )
+        with pytest.raises(ValueError, match="conflicting kits"):
+            load_samples(bad_tsv)

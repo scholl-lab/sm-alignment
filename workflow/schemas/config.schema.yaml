@@ -146,6 +146,12 @@ properties:
           ValidateSamFile:
             type: string
             default: ""
+          CollectMultipleMetrics:
+            type: string
+            default: ""
+          CollectHsMetrics:
+            type: string
+            default: ""
 
   trimming:
     type: object
@@ -219,6 +225,10 @@ properties:
         type: boolean
         default: true
         description: Run Picard CollectMultipleMetrics on final BAM
+      picard_validate_sam:
+        type: boolean
+        default: true
+        description: Run Picard ValidateSamFile on final BAM
       qualimap:
         type: boolean
         default: false
@@ -227,6 +237,26 @@ properties:
         type: string
         default: ""
         description: BED file for Qualimap exome on-target stats
+      hs_metrics:
+        type: object
+        description: Picard CollectHsMetrics configuration per capture kit
+        properties:
+          enabled:
+            type: boolean
+            default: false
+          kits:
+            type: object
+            default: {}
+            additionalProperties:
+              type: object
+              properties:
+                bait_intervals:
+                  type: string
+                target_intervals:
+                  type: string
+              required:
+                - bait_intervals
+                - target_intervals
 
   subset:
     type: object

@@ -112,7 +112,28 @@ def load_samples(path: str | os.PathLike[str]) -> pd.DataFrame:
     if basenames.duplicated().any():
         dups = sorted(basenames[basenames.duplicated()].unique().tolist())
         raise ValueError(f"Duplicate fastq_files_basename entries in {path}: {dups}")
+    if "kit" in df.columns and "project_sample" in df.columns:
+        for sample, grp in df.groupby("project_sample"):
+            kits = {str(k).strip() for k in grp["kit"]}
+            if len(kits) > 1:
+                raise ValueError(
+                    f"Sample '{sample}' has conflicting kits in {path}: {sorted(kits)}"
+                )
     return df.set_index("fastq_files_basename", drop=False)
+
+
+def get_sample_kit(samples_df, sample: str) -> str:
+    """Return the capture kit identifier for a sample (or '' if unset)."""
+    if "kit" not in samples_df.columns:
+        return ""
+    vals = {
+        str(k).strip()
+        for k in samples_df.loc[samples_df["project_sample"] == sample, "kit"]
+        if str(k).strip() and str(k).strip().lower() != "nan"
+    }
+    if len(vals) > 1:
+        raise ValueError(f"Sample '{sample}' has conflicting kits: {sorted(vals)}")
+    return next(iter(vals)) if vals else ""
 
 
 def format_read_group(

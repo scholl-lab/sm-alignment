@@ -24,6 +24,9 @@ properties:
   library:
     type: string
     description: Optional library identifier for read group ID, LB, and PU tags
+  kit:
+    type: string
+    description: Optional capture kit identifier for Picard CollectHsMetrics
 
 required:
   - fastq_files_basename

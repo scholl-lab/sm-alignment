@@ -2,6 +2,7 @@ import os
 from rules.helpers import (
     format_read_group as _format_read_group_impl,
     get_java_opts as _get_java_opts_impl,
+    get_sample_kit as _get_sample_kit_impl,
     get_samples as _get_samples_impl,
     get_all_basenames as _get_all_basenames_impl,
     get_basenames_for_sample as _get_basenames_impl,

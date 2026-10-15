@@ -107,6 +107,7 @@ class TestDryRun:
             "samtools_stats",
             "samtools_flagstat",
             "picard_collect_multiple_metrics",
+            "picard_collect_hs_metrics",
             "picard_validate_sam",
             "qualimap_bamqc",
             "multiqc",
@@ -165,6 +166,7 @@ class TestDryRun:
         assert "--OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500" in result.stdout
         assert ".merged.dedup.bai" in result.stdout
         assert "rule picard_validate_sam:" in result.stdout
+        assert ".pdf" not in result.stdout
 
     def test_default_profile_runtimes(self):
         """Dry-run with --workflow-profile profiles/default resolves all rule runtimes <=480."""
@@ -173,3 +175,19 @@ class TestDryRun:
             str(REPO_ROOT / "profiles" / "default"),
         )
         assert result.returncode == 0, result.stderr
+
+    def test_hs_metrics_enabled(self, tmp_path):
+        """Dry-run with qc.hs_metrics.enabled=true schedules picard_collect_hs_metrics before multiqc."""
+        baits = tmp_path / "baits.interval_list"
+        targets = tmp_path / "targets.interval_list"
+        baits.write_text("@HD\tVN:1.6\n")
+        targets.write_text("@HD\tVN:1.6\n")
+        result = _run_snakemake(
+            "-p",
+            "--config",
+            f"qc={{enabled: true, hs_metrics: {{enabled: true, kits: {{S33266340: {{bait_intervals: '{baits}', target_intervals: '{targets}'}}}}}}}}",
+        )
+        assert result.returncode == 0, result.stderr
+        assert "rule picard_collect_hs_metrics:" in result.stdout
+        assert f'--BAIT_INTERVALS "{baits}"' in result.stdout
+        assert f'--TARGET_INTERVALS "{targets}"' in result.stdout

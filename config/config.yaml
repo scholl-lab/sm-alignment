@@ -88,6 +88,9 @@ qc:
   picard_collect_metrics: true  # Picard CollectMultipleMetrics on final BAM
   qualimap: false               # Qualimap bamqc — opt-in (high memory on GRCh38)
   qualimap_feature_file: ""     # BED file for Qualimap exome on-target stats
+  hs_metrics:
+    enabled: false
+    kits: {}
 
 # --- Subset BAM (optional) ---
 subset:
