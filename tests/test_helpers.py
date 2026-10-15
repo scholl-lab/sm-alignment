@@ -12,6 +12,7 @@ import pytest
 # Add workflow/rules to path so we can import helpers directly
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "workflow" / "rules"))
 from helpers import (
+    format_read_group,
     get_all_basenames,
     get_basenames_for_sample,
     get_java_opts,
@@ -212,3 +213,43 @@ class TestResolveFastqPath:
             fastq_dir="/data/fastqs",
         )
         assert result == os.path.join("/data/fastqs", "SampleB_S2_L001_R2_001.fastq.gz")
+
+
+# ============================================================================
+# TestFormatReadGroup
+# ============================================================================
+
+
+class TestFormatReadGroup:
+    """Tests for format_read_group()."""
+
+    def test_with_flowcell_and_library(self):
+        df = pd.DataFrame(
+            {
+                "fastq_files_basename": ["S1_L001", "S1_L001_run2"],
+                "lane": ["L001", "L001"],
+                "project_sample": ["APA1-T", "APA1-T"],
+                "mdc_project": ["A5297", "A5297"],
+                "flowcell": ["FC1", "FC2"],
+                "library": ["LIB1", "LIB2"],
+            }
+        ).set_index("fastq_files_basename", drop=False)
+        rg1 = format_read_group(df, "S1_L001", "ILLUMINA")
+        rg2 = format_read_group(df, "S1_L001_run2", "ILLUMINA")
+        assert rg1 == r"@RG\tID:FC1.L001.LIB1\tSM:APA1-T\tLB:LIB1\tPL:ILLUMINA\tPU:FC1.L001.LIB1"
+        assert rg2 == r"@RG\tID:FC2.L001.LIB2\tSM:APA1-T\tLB:LIB2\tPL:ILLUMINA\tPU:FC2.L001.LIB2"
+        assert rg1 != rg2
+
+    def test_fallback_to_subfolder_and_sample(self, samples_df_with_subfolder):
+        rg = format_read_group(samples_df_with_subfolder, "SampleA_S1_L001", "ILLUMINA")
+        assert (
+            rg
+            == r"@RG\tID:run1.L001.SampleA\tSM:SampleA\tLB:SampleA\tPL:ILLUMINA\tPU:run1.L001.SampleA"
+        )
+
+    def test_fallback_to_mdc_project_and_sample(self, samples_df):
+        rg = format_read_group(samples_df, "SampleA_S1_L001", "ILLUMINA")
+        assert (
+            rg
+            == r"@RG\tID:TestProject.L001.SampleA\tSM:SampleA\tLB:SampleA\tPL:ILLUMINA\tPU:TestProject.L001.SampleA"
+        )

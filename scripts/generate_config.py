@@ -847,7 +847,7 @@ processing:
 # --- Tool-specific extra CLI arguments (passthrough strings) ---
 params:
   bwa_mem:
-    extra: ""
+    extra: "-K 100000000 -Y"
   samtools:
     sort_extra: ""
     merge_extra: ""

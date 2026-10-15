@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 from rules.helpers import (
+    format_read_group as _format_read_group_impl,
     get_java_opts as _get_java_opts_impl,
     get_samples as _get_samples_impl,
     get_all_basenames as _get_all_basenames_impl,

@@ -18,6 +18,12 @@ properties:
   subfolder:
     type: string
     description: Optional subdirectory within FASTQ folder for multi-run support
+  flowcell:
+    type: string
+    description: Optional flowcell identifier for read group ID and PU tags
+  library:
+    type: string
+    description: Optional library identifier for read group ID, LB, and PU tags
 
 required:
   - fastq_files_basename

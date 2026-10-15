@@ -150,3 +150,9 @@ class TestDryRun:
         assert "ftl=0" in result.stdout
         assert "qtrim=f" in result.stdout
         assert "quantize=" not in result.stdout
+
+    def test_bwa_map_default_extra(self):
+        """Dry-run bwa_map command contains -K 100000000 -Y."""
+        result = _run_snakemake("-p")
+        assert result.returncode == 0, result.stderr
+        assert "-K 100000000 -Y" in result.stdout

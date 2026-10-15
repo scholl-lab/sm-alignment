@@ -121,7 +121,7 @@ properties:
         properties:
           extra:
             type: string
-            default: ""
+            default: "-K 100000000 -Y"
       samtools:
         type: object
         properties:

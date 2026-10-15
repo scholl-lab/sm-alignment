@@ -93,3 +93,36 @@ def resolve_fastq_path(
     if subfolder:
         return os.path.join(fastq_dir, str(subfolder), f"{basename}{suffix}")
     return os.path.join(fastq_dir, f"{basename}{suffix}")
+
+
+def format_read_group(
+    samples_df,
+    basename: str,
+    platform: str = "ILLUMINA",
+) -> str:
+    """Format @RG header string for a FASTQ basename row in samples_df.
+
+    Produces ID:{flowcell}.{lane}.{library}, SM:{sample}, LB:{library},
+    PL:{platform}, PU:{flowcell}.{lane}.{library}, falling back to
+    subfolder/mdc_project and project_sample when flowcell/library are omitted.
+    """
+    row = samples_df.loc[basename]
+    sample = str(row["project_sample"]).strip()
+    lane = str(row["lane"]).strip()
+
+    flowcell = ""
+    for col in ("flowcell", "subfolder", "mdc_project"):
+        if col in samples_df.columns:
+            val = row.get(col, "")
+            if val is not None and str(val).strip() and str(val).strip().lower() != "nan":
+                flowcell = str(val).strip()
+                break
+
+    library = sample
+    if "library" in samples_df.columns:
+        val = row.get("library", "")
+        if val is not None and str(val).strip() and str(val).strip().lower() != "nan":
+            library = str(val).strip()
+
+    rg_id = f"{flowcell}.{lane}.{library}"
+    return f"@RG\\tID:{rg_id}\\tSM:{sample}\\tLB:{library}\\tPL:{platform}\\tPU:{rg_id}"
