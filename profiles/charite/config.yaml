@@ -18,5 +18,7 @@ executor: slurm
 default-resources:
   slurm_partition: compute
   slurm_account: sc-users
+  mem_mb: 4000
+  runtime: 120
 jobs: 50
 latency-wait: 60

@@ -22,11 +22,6 @@ printshellcmds: true
 software-deployment-method:
   - conda
 
-# --- Default resources (baseline for ALL rules) ---
-default-resources:
-  mem_mb: 4000
-  runtime: 120
-
 # --- Per-rule thread counts ---
 set-threads:
   bwa_map: 16

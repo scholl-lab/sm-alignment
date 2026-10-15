@@ -30,9 +30,7 @@ rule trim_adapters:
         trimpolya=TRIM_CFG.get("trimpolya", 0),
         qtrim=TRIM_CFG.get("qtrim", "f"),
         trimq=TRIM_CFG.get("trimq", 10),
-        quantize=(
-            f"quantize={TRIM_CFG['quantize']}" if TRIM_CFG.get("quantize", "") else ""
-        ),
+        quantize=(f"quantize={TRIM_CFG['quantize']}" if TRIM_CFG.get("quantize", "") else ""),
     threads: 4
     resources:
         runtime=240,

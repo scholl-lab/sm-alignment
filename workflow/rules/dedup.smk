@@ -14,8 +14,7 @@ rule deduplicate_bam_files:
         .get("gatk", {})
         .get(
             "MarkDuplicates",
-            "--CREATE_INDEX true --VALIDATION_STRINGENCY LENIENT"
-            " --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500",
+            "--VALIDATION_STRINGENCY LENIENT --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500",
         ),
     threads: 4
     resources:
@@ -27,6 +26,7 @@ rule deduplicate_bam_files:
     shell:
         r"""
         gatk --java-options '{params.java_opts}' MarkDuplicates \
+            --CREATE_INDEX true \
             {params.extra} \
             -I "{input.merged_bam}" \
             -O "{output.dedup_bam}" \

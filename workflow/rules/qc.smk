@@ -233,9 +233,7 @@ def _get_hs_kit_config(sample):
     kit = _get_sample_kit_impl(samples_df, sample)
     if kit:
         if kit not in kits_cfg:
-            raise ValueError(
-                f"Sample '{sample}' kit '{kit}' not found in qc.hs_metrics.kits"
-            )
+            raise ValueError(f"Sample '{sample}' kit '{kit}' not found in qc.hs_metrics.kits")
         return kits_cfg[kit]
     if len(kits_cfg) == 1:
         return next(iter(kits_cfg.values()))
@@ -281,11 +279,11 @@ rule picard_validate_sam:
     """Validate final BAM structure and SAM tags with GATK ValidateSamFile."""
     input:
         bam=os.path.join(BQSR_DIR, "{sample}" + FINAL_BAM_SUFFIX),
+        ref=REF,
     output:
         os.path.join(PICARD_QC_DIR, "{sample}.validate_sam.txt"),
     params:
         java_opts=get_java_opts,
-        reference=REF,
         extra=config.get("params", {}).get("gatk", {}).get("ValidateSamFile", ""),
     threads: 1
     conda:
@@ -294,13 +292,16 @@ rule picard_validate_sam:
         os.path.join(LOG_DIR, "picard_validate_sam.{sample}.log"),
     shell:
         r"""
+        rc=0
         gatk --java-options '{params.java_opts}' ValidateSamFile \
             {params.extra} \
             -I "{input.bam}" \
-            -R "{params.reference}" \
+            -R "{input.ref}" \
             -M SUMMARY \
             -O "{output}" \
-            2> {log}
+            2> {log} || rc=$?
+        [ -s "{output}" ] && cat "{output}" >> {log}
+        exit $rc
         """
 
 
@@ -394,15 +395,10 @@ def _collect_multiqc_inputs(wildcards):
         )
 
     if HS_METRICS_ENABLED:
-        hs_samples = (
-            [s for s in all_samples if _get_sample_kit_impl(samples_df, s)]
-            if "kit" in samples_df.columns
-            else all_samples
-        )
         inputs.extend(
             expand(
                 os.path.join(PICARD_QC_DIR, "{sample}.hs_metrics.txt"),
-                sample=hs_samples,
+                sample=all_samples,
             )
         )
 

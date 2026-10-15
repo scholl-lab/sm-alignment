@@ -2,9 +2,7 @@ rule base_recalibration:
     """Generate BQSR recalibration table from known variant sites."""
     input:
         dedup_bam=os.path.join(DEDUP_DIR, "{sample}" + DEDUP_SUFFIX),
-        dedup_bai=os.path.join(
-            DEDUP_DIR, "{sample}" + DEDUP_SUFFIX.removesuffix(".bam") + ".bai"
-        ),
+        dedup_bai=os.path.join(DEDUP_DIR, "{sample}" + DEDUP_SUFFIX.removesuffix(".bam") + ".bai"),
         reference=REF,
         known_sites=KNOWN_SITES,
         intervals=[TARGET_INTERVALS] if TARGET_INTERVALS else [],
@@ -12,10 +10,7 @@ rule base_recalibration:
         recal_table=os.path.join(BQSR_DIR, "{sample}" + RECAL_TABLE_SUFFIX),
     params:
         java_opts=get_java_opts,
-        known_sites=lambda wc, input: " ".join(
-            f'--known-sites "{ks}"' for ks in input.known_sites
-        ),
-        padding=BQSR_INTERVAL_PADDING,
+        known_sites=lambda wc, input: " ".join(f'--known-sites "{ks}"' for ks in input.known_sites),
         intervals=lambda wc, input: (
             f'-L "{input.intervals}" --interval-padding {BQSR_INTERVAL_PADDING}'
             if input.intervals
@@ -46,9 +41,7 @@ rule apply_bqsr:
     """Apply base quality score recalibration to produce final BAMs."""
     input:
         dedup_bam=os.path.join(DEDUP_DIR, "{sample}" + DEDUP_SUFFIX),
-        dedup_bai=os.path.join(
-            DEDUP_DIR, "{sample}" + DEDUP_SUFFIX.removesuffix(".bam") + ".bai"
-        ),
+        dedup_bai=os.path.join(DEDUP_DIR, "{sample}" + DEDUP_SUFFIX.removesuffix(".bam") + ".bai"),
         recal_table=os.path.join(BQSR_DIR, "{sample}" + RECAL_TABLE_SUFFIX),
         reference=REF,
     output:
@@ -58,8 +51,8 @@ rule apply_bqsr:
         ),
     params:
         java_opts=lambda wc, resources: (
-            f"-Xms{int(resources.mem_mb * 0.2)}m"
-            f" -Xmx{int(resources.mem_mb * 0.8)}m"
+            f"-Xms{int(resources.mem_mb*0.2)}m"
+            f" -Xmx{int(resources.mem_mb*0.8)}m"
             f" -Djava.io.tmpdir={resources.tmpdir}"
             f" -Dsamjdk.compression_level={COMPRESSION_LEVEL}"
         ),

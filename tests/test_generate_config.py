@@ -673,14 +673,13 @@ class TestBuildConfigYaml:
             "known_sites": ["/ks.vcf.gz"],
         }
         result = gc._build_config_yaml(ref_data, "/fastqs", "/output", "samples.tsv")
-        expected = (
-            "--CREATE_INDEX true --VALIDATION_STRINGENCY LENIENT"
-            " --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500"
-        )
+        expected = "--VALIDATION_STRINGENCY LENIENT --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500"
         assert expected in result
         repo_root = Path(__file__).resolve().parent.parent
         assert expected in (repo_root / "config" / "config.yaml").read_text()
-        assert "dedup_bai" in (repo_root / "workflow" / "rules" / "dedup.smk").read_text()
+        dedup_smk = (repo_root / "workflow" / "rules" / "dedup.smk").read_text()
+        assert "dedup_bai" in dedup_smk
+        assert "--CREATE_INDEX true" in dedup_smk
         assert "dedup_bai" in (repo_root / "workflow" / "rules" / "bqsr.smk").read_text()
         assert "picard_validate_sam" in (repo_root / "workflow" / "rules" / "qc.smk").read_text()
 
@@ -697,11 +696,12 @@ class TestBuildConfigYaml:
         assert bih_cfg["latency-wait"] == 60
         assert bih_cfg["default-resources"]["slurm_account"] == "hpc-ag-scholl"
         assert bih_cfg["default-resources"]["slurm_partition"] == "standard"
+        assert bih_cfg["default-resources"]["runtime"] <= 480
 
         default_cfg = yaml.safe_load(
             (repo_root / "profiles" / "default" / "config.yaml").read_text()
         )
-        assert default_cfg["default-resources"]["runtime"] <= 480
+        assert "default-resources" not in default_cfg
         for rule_name, res in default_cfg["set-resources"].items():
             assert res["runtime"] <= 480, f"{rule_name} runtime {res['runtime']} > 480"
 
@@ -711,7 +711,7 @@ class TestBuildConfigYaml:
 
         launcher = (repo_root / "scripts" / "run_snakemake.sh").read_text()
         assert "${TMPDIR:-${HOME}/scratch/tmp}" in launcher
-        assert 'profiles/bih"' in launcher
+        assert "profiles/bih" in launcher
 
 
 # ============================================================================

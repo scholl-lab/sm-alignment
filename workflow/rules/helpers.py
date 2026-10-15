@@ -92,7 +92,7 @@ def resolve_fastq_path(
         return os.path.join(trimmed_dir, f"{basename}{suffix}")
     row = samples_df.loc[basename]
     subfolder = row.get("subfolder", "") if "subfolder" in samples_df.columns else ""
-    if subfolder and str(subfolder).strip() and str(subfolder).strip().lower() != "nan":
+    if subfolder and str(subfolder).strip():
         return os.path.join(fastq_dir, str(subfolder).strip(), f"{basename}{suffix}")
     return os.path.join(fastq_dir, f"{basename}{suffix}")
 
@@ -129,7 +129,7 @@ def get_sample_kit(samples_df, sample: str) -> str:
     vals = {
         str(k).strip()
         for k in samples_df.loc[samples_df["project_sample"] == sample, "kit"]
-        if str(k).strip() and str(k).strip().lower() != "nan"
+        if str(k).strip()
     }
     if len(vals) > 1:
         raise ValueError(f"Sample '{sample}' has conflicting kits: {sorted(vals)}")
@@ -155,14 +155,14 @@ def format_read_group(
     for col in ("flowcell", "subfolder", "mdc_project"):
         if col in samples_df.columns:
             val = row.get(col, "")
-            if val is not None and str(val).strip() and str(val).strip().lower() != "nan":
+            if val is not None and str(val).strip():
                 flowcell = str(val).strip()
                 break
 
     library = sample
     if "library" in samples_df.columns:
         val = row.get("library", "")
-        if val is not None and str(val).strip() and str(val).strip().lower() != "nan":
+        if val is not None and str(val).strip():
             library = str(val).strip()
 
     rg_id = f"{flowcell}.{lane}.{library}"
