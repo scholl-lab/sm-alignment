@@ -107,6 +107,7 @@ class TestDryRun:
             "samtools_stats",
             "samtools_flagstat",
             "picard_collect_multiple_metrics",
+            "picard_validate_sam",
             "qualimap_bamqc",
             "multiqc",
         ):
@@ -156,3 +157,11 @@ class TestDryRun:
         result = _run_snakemake("-p")
         assert result.returncode == 0, result.stderr
         assert "-K 100000000 -Y" in result.stdout
+
+    def test_dedup_and_validate_sam(self):
+        """Dry-run includes OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500, tracks dedup_bai, and schedules picard_validate_sam."""
+        result = _run_snakemake("-p")
+        assert result.returncode == 0, result.stderr
+        assert "--OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500" in result.stdout
+        assert ".merged.dedup.bai" in result.stdout
+        assert "rule picard_validate_sam:" in result.stdout

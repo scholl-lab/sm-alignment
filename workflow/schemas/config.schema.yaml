@@ -136,11 +136,14 @@ properties:
         properties:
           MarkDuplicates:
             type: string
-            default: "--CREATE_INDEX true --VALIDATION_STRINGENCY SILENT"
+            default: "--CREATE_INDEX true --VALIDATION_STRINGENCY LENIENT --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500"
           BaseRecalibrator:
             type: string
             default: ""
           ApplyBQSR:
+            type: string
+            default: ""
+          ValidateSamFile:
             type: string
             default: ""
 

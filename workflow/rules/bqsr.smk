@@ -2,6 +2,9 @@ rule base_recalibration:
     """Generate BQSR recalibration table from known variant sites."""
     input:
         dedup_bam=os.path.join(DEDUP_DIR, "{sample}" + DEDUP_SUFFIX),
+        dedup_bai=os.path.join(
+            DEDUP_DIR, "{sample}" + DEDUP_SUFFIX.removesuffix(".bam") + ".bai"
+        ),
         reference=REF,
         known_sites=KNOWN_SITES,
         intervals=[TARGET_INTERVALS] if TARGET_INTERVALS else [],
@@ -43,6 +46,9 @@ rule apply_bqsr:
     """Apply base quality score recalibration to produce final BAMs."""
     input:
         dedup_bam=os.path.join(DEDUP_DIR, "{sample}" + DEDUP_SUFFIX),
+        dedup_bai=os.path.join(
+            DEDUP_DIR, "{sample}" + DEDUP_SUFFIX.removesuffix(".bam") + ".bai"
+        ),
         recal_table=os.path.join(BQSR_DIR, "{sample}" + RECAL_TABLE_SUFFIX),
         reference=REF,
     output:

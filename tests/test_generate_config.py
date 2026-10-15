@@ -664,6 +664,26 @@ class TestBuildConfigYaml:
         assert "af-only-gnomad" not in repo_cfg
         assert "1000g_pon" not in repo_cfg
 
+    def test_mark_duplicates_and_dedup_defaults(self):
+        """Generated and repo configs use LENIENT and OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500."""
+        ref_data = {
+            "genome": "/ref.fna",
+            "genome_gz": "",
+            "build": "GRCh38",
+            "known_sites": ["/ks.vcf.gz"],
+        }
+        result = gc._build_config_yaml(ref_data, "/fastqs", "/output", "samples.tsv")
+        expected = (
+            "--CREATE_INDEX true --VALIDATION_STRINGENCY LENIENT"
+            " --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500"
+        )
+        assert expected in result
+        repo_root = Path(__file__).resolve().parent.parent
+        assert expected in (repo_root / "config" / "config.yaml").read_text()
+        assert "dedup_bai" in (repo_root / "workflow" / "rules" / "dedup.smk").read_text()
+        assert "dedup_bai" in (repo_root / "workflow" / "rules" / "bqsr.smk").read_text()
+        assert "picard_validate_sam" in (repo_root / "workflow" / "rules" / "qc.smk").read_text()
+
 
 # ============================================================================
 # TestWriteSamplesTsv

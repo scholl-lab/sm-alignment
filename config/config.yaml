@@ -57,7 +57,7 @@ params:
     sort_extra: ""
     merge_extra: ""
   gatk:
-    MarkDuplicates: "--CREATE_INDEX true --VALIDATION_STRINGENCY SILENT"
+    MarkDuplicates: "--CREATE_INDEX true --VALIDATION_STRINGENCY LENIENT --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500"
     BaseRecalibrator: ""
     ApplyBQSR: ""
 

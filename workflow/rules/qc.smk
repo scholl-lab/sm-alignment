@@ -226,6 +226,36 @@ rule picard_collect_multiple_metrics:
 
 
 # =============================================================================
+# Picard ValidateSamFile (via GATK4)
+# =============================================================================
+rule picard_validate_sam:
+    """Validate final BAM structure and SAM tags with GATK ValidateSamFile."""
+    input:
+        bam=os.path.join(BQSR_DIR, "{sample}" + FINAL_BAM_SUFFIX),
+    output:
+        os.path.join(PICARD_QC_DIR, "{sample}.validate_sam.txt"),
+    params:
+        java_opts=get_java_opts,
+        reference=REF,
+        extra=config.get("params", {}).get("gatk", {}).get("ValidateSamFile", ""),
+    threads: 1
+    conda:
+        "../envs/gatk.yaml"
+    log:
+        os.path.join(LOG_DIR, "picard_validate_sam.{sample}.log"),
+    shell:
+        r"""
+        gatk --java-options '{params.java_opts}' ValidateSamFile \
+            {params.extra} \
+            -I "{input.bam}" \
+            -R "{params.reference}" \
+            -M SUMMARY \
+            -O "{output}" \
+            2> {log}
+        """
+
+
+# =============================================================================
 # Qualimap bamqc (opt-in)
 # =============================================================================
 rule qualimap_bamqc:
@@ -302,6 +332,14 @@ def _collect_multiqc_inputs(wildcards):
                     PICARD_QC_DIR,
                     "{sample}.multiple_metrics.alignment_summary_metrics",
                 ),
+                sample=all_samples,
+            )
+        )
+
+    if QC_CFG.get("picard_validate_sam", True):
+        inputs.extend(
+            expand(
+                os.path.join(PICARD_QC_DIR, "{sample}.validate_sam.txt"),
                 sample=all_samples,
             )
         )
