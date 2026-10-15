@@ -684,6 +684,35 @@ class TestBuildConfigYaml:
         assert "dedup_bai" in (repo_root / "workflow" / "rules" / "bqsr.smk").read_text()
         assert "picard_validate_sam" in (repo_root / "workflow" / "rules" / "qc.smk").read_text()
 
+    def test_bih_profile_and_runtimes(self):
+        """BIH SLURM profile exists, rule/profile runtimes are <=480, and launcher honours TMPDIR."""
+        import re
+
+        import yaml
+
+        repo_root = Path(__file__).resolve().parent.parent
+        bih_cfg = yaml.safe_load((repo_root / "profiles" / "bih" / "config.yaml").read_text())
+        assert bih_cfg["executor"] == "slurm"
+        assert bih_cfg["jobs"] == 50
+        assert bih_cfg["latency-wait"] == 60
+        assert bih_cfg["default-resources"]["slurm_account"] == "hpc-ag-scholl"
+        assert bih_cfg["default-resources"]["slurm_partition"] == "standard"
+
+        default_cfg = yaml.safe_load(
+            (repo_root / "profiles" / "default" / "config.yaml").read_text()
+        )
+        assert default_cfg["default-resources"]["runtime"] <= 480
+        for rule_name, res in default_cfg["set-resources"].items():
+            assert res["runtime"] <= 480, f"{rule_name} runtime {res['runtime']} > 480"
+
+        for smk in (repo_root / "workflow" / "rules").glob("*.smk"):
+            for m in re.finditer(r"runtime\s*=\s*(\d+)", smk.read_text()):
+                assert int(m.group(1)) <= 480, f"{smk.name} runtime {m.group(1)} > 480"
+
+        launcher = (repo_root / "scripts" / "run_snakemake.sh").read_text()
+        assert "${TMPDIR:-${HOME}/scratch/tmp}" in launcher
+        assert 'profiles/bih"' in launcher
+
 
 # ============================================================================
 # TestWriteSamplesTsv

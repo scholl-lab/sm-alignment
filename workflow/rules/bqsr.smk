@@ -24,7 +24,7 @@ rule base_recalibration:
         extra=config.get("params", {}).get("gatk", {}).get("BaseRecalibrator", ""),
     threads: 4
     resources:
-        runtime=4320,
+        runtime=480,
     conda:
         "../envs/gatk.yaml"
     log:
@@ -66,7 +66,7 @@ rule apply_bqsr:
         extra=config.get("params", {}).get("gatk", {}).get("ApplyBQSR", ""),
     threads: 4
     resources:
-        runtime=4320,
+        runtime=480,
     conda:
         "../envs/gatk.yaml"
     log:

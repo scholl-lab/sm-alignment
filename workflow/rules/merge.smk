@@ -12,7 +12,7 @@ rule merge_bam_files:
         extra=config.get("params", {}).get("samtools", {}).get("merge_extra", ""),
     threads: 8
     resources:
-        runtime=1440,
+        runtime=240,
     conda:
         "../envs/bwa_samtools.yaml"
     log:

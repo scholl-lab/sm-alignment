@@ -35,7 +35,7 @@ rule trim_adapters:
         ),
     threads: 4
     resources:
-        runtime=720,
+        runtime=240,
     conda:
         "../envs/bbtools.yaml"
     log:

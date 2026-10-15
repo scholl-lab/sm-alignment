@@ -19,7 +19,7 @@ rule deduplicate_bam_files:
         ),
     threads: 4
     resources:
-        runtime=4320,
+        runtime=480,
     conda:
         "../envs/gatk.yaml"
     log:

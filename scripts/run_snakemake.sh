@@ -46,9 +46,15 @@ if [[ "$CLUSTER" == "charite" ]] && [[ -f /etc/profile.d/conda.sh ]]; then
 fi
 conda activate snakemake 2>/dev/null || true
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [[ ! -d "${REPO_ROOT}/profiles" ]] && [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
+    REPO_ROOT="${SLURM_SUBMIT_DIR}"
+fi
+
 # ---- TMPDIR setup ----
 if [[ "$CLUSTER" == "bih" ]]; then
-    BASE_TMPDIR="${HOME}/scratch/tmp"
+    BASE_TMPDIR="${TMPDIR:-${HOME}/scratch/tmp}"
 else
     BASE_TMPDIR="${TMPDIR:-/tmp}/snakemake"
 fi
@@ -64,9 +70,9 @@ export SBATCH_DEFAULTS="--output=slurm_logs/%x-%j.log"
 # ---- Cluster-specific Snakemake arguments ----
 CLUSTER_ARGS=()
 if [[ "$CLUSTER" == "bih" ]]; then
-    CLUSTER_ARGS+=(--profile=cubi-v1)
+    CLUSTER_ARGS+=(--profile "${REPO_ROOT}/profiles/bih")
 elif [[ "$CLUSTER" == "charite" ]]; then
-    CLUSTER_ARGS+=(--profile profiles/charite)
+    CLUSTER_ARGS+=(--profile "${REPO_ROOT}/profiles/charite")
 fi
 
 # ---- Launch ----
@@ -82,7 +88,7 @@ echo "========================"
 snakemake \
     -s "${SNAKEFILE}" \
     --configfile "${CONFIG_FILE}" \
-    --workflow-profile profiles/default \
+    --workflow-profile "${REPO_ROOT}/profiles/default" \
     "${CLUSTER_ARGS[@]}" \
     "$@"
 

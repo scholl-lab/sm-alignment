@@ -165,3 +165,11 @@ class TestDryRun:
         assert "--OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500" in result.stdout
         assert ".merged.dedup.bai" in result.stdout
         assert "rule picard_validate_sam:" in result.stdout
+
+    def test_default_profile_runtimes(self):
+        """Dry-run with --workflow-profile profiles/default resolves all rule runtimes <=480."""
+        result = _run_snakemake(
+            "--workflow-profile",
+            str(REPO_ROOT / "profiles" / "default"),
+        )
+        assert result.returncode == 0, result.stderr

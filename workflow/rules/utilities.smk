@@ -55,7 +55,7 @@ rule convert_bam_to_fastq:
         r2="{prefix}_R2.fastq.gz",
     threads: 8
     resources:
-        runtime=1440,
+        runtime=480,
     conda:
         "../envs/bwa_samtools.yaml"
     log:
@@ -131,7 +131,7 @@ rule align_and_sort:
         ),
     threads: 8
     resources:
-        runtime=1440,
+        runtime=480,
     conda:
         "../envs/bwa_samtools.yaml"
     log:

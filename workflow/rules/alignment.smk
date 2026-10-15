@@ -13,7 +13,7 @@ rule bwa_map:
         extra=config.get("params", {}).get("bwa_mem", {}).get("extra", "-K 100000000 -Y"),
     threads: 16
     resources:
-        runtime=1440,
+        runtime=480,
     conda:
         "../envs/bwa_samtools.yaml"
     log:
