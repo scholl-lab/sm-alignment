@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import os
 
+import pandas as pd
+
 
 def get_java_opts(resources_mem_mb: int, tmpdir: str) -> str:
     """Derive GATK --java-options from allocated resources.
@@ -90,9 +92,27 @@ def resolve_fastq_path(
         return os.path.join(trimmed_dir, f"{basename}{suffix}")
     row = samples_df.loc[basename]
     subfolder = row.get("subfolder", "") if "subfolder" in samples_df.columns else ""
-    if subfolder:
-        return os.path.join(fastq_dir, str(subfolder), f"{basename}{suffix}")
+    if subfolder and str(subfolder).strip() and str(subfolder).strip().lower() != "nan":
+        return os.path.join(fastq_dir, str(subfolder).strip(), f"{basename}{suffix}")
     return os.path.join(fastq_dir, f"{basename}{suffix}")
+
+
+def load_samples(path: str | os.PathLike[str]) -> pd.DataFrame:
+    """Load and validate samples.tsv with string columns and no NaN coercion."""
+    df = pd.read_table(path, dtype=str, keep_default_na=False)
+    if df.empty:
+        raise ValueError(f"Samples table is empty: {path}")
+    if "fastq_files_basename" not in df.columns:
+        raise ValueError(f"Missing required column 'fastq_files_basename' in {path}")
+    basenames = df["fastq_files_basename"]
+    if (basenames.str.strip() == "").any():
+        raise ValueError(f"Empty fastq_files_basename entry in {path}")
+    if basenames.str.contains(r"[/\\]", regex=True).any():
+        raise ValueError(f"fastq_files_basename must not contain path separators in {path}")
+    if basenames.duplicated().any():
+        dups = sorted(basenames[basenames.duplicated()].unique().tolist())
+        raise ValueError(f"Duplicate fastq_files_basename entries in {path}: {dups}")
+    return df.set_index("fastq_files_basename", drop=False)
 
 
 def format_read_group(

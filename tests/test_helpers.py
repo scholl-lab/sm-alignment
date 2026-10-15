@@ -17,6 +17,7 @@ from helpers import (
     get_basenames_for_sample,
     get_java_opts,
     get_samples,
+    load_samples,
     resolve_fastq_path,
 )
 
@@ -253,3 +254,53 @@ class TestFormatReadGroup:
             rg
             == r"@RG\tID:TestProject.L001.SampleA\tSM:SampleA\tLB:SampleA\tPL:ILLUMINA\tPU:TestProject.L001.SampleA"
         )
+
+
+# ============================================================================
+# TestLoadSamples
+# ============================================================================
+
+
+class TestLoadSamples:
+    """Tests for load_samples()."""
+
+    def test_numeric_ids_and_empty_subfolder(self, tmp_path):
+        tsv = tmp_path / "samples.tsv"
+        tsv.write_text(
+            "fastq_files_basename\tlane\tproject_sample\tmdc_project\tsubfolder\n"
+            "1001_S1_L001\t1\t1001\t5297\t\n"
+            "1002_S2_L001\t2\t1002\t5297\trun2\n"
+        )
+        df = load_samples(tsv)
+        assert df.loc["1001_S1_L001", "project_sample"] == "1001"
+        assert df.loc["1001_S1_L001", "lane"] == "1"
+        assert df.loc["1001_S1_L001", "subfolder"] == ""
+        path = resolve_fastq_path(
+            "1001_S1_L001",
+            "_R1_001.fastq.gz",
+            df,
+            trimming_enabled=False,
+            trimmed_dir="/out/trimmed",
+            fastq_dir="/data/fastqs",
+        )
+        assert path == "/data/fastqs/1001_S1_L001_R1_001.fastq.gz"
+        assert "nan" not in path
+
+    def test_duplicate_basenames_rejected(self, tmp_path):
+        tsv = tmp_path / "samples.tsv"
+        tsv.write_text(
+            "fastq_files_basename\tlane\tproject_sample\tmdc_project\n"
+            "dup_S1_L001\tL001\tSampleA\tProj\n"
+            "dup_S1_L001\tL002\tSampleB\tProj\n"
+        )
+        with pytest.raises(ValueError, match="Duplicate fastq_files_basename"):
+            load_samples(tsv)
+
+    def test_path_separator_in_basename_rejected(self, tmp_path):
+        tsv = tmp_path / "samples.tsv"
+        tsv.write_text(
+            "fastq_files_basename\tlane\tproject_sample\tmdc_project\n"
+            "sub/S1_L001\tL001\tSampleA\tProj\n"
+        )
+        with pytest.raises(ValueError, match="path separators"):
+            load_samples(tsv)

@@ -13,11 +13,13 @@ configfile: "config/config.yaml"
 
 validate(config, "schemas/config.schema.yaml")
 
-samples_raw = __import__("pandas").read_table(config["paths"]["samples"])
-validate(samples_raw, "schemas/samples.schema.yaml")
-
 
 include: "rules/common.smk"
+
+
+validate(samples_df, "schemas/samples.schema.yaml")
+
+
 include: "rules/alignment.smk"
 include: "rules/merge.smk"
 include: "rules/dedup.smk"
