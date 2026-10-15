@@ -128,3 +128,25 @@ class TestDryRun:
         fail_res = _run_snakemake("--config", f"ref={{target_intervals: '{missing}'}}")
         assert fail_res.returncode != 0
         assert "MissingInputException" in (fail_res.stdout + fail_res.stderr)
+
+    def test_trimming_with_subfolder_and_defaults(self, tmp_path, fastq_dir):
+        """Dry-run with trimming.enabled=true and subfolder set succeeds with ftl=0 qtrim=f and no quantize=."""
+        run1 = tmp_path / "fastqs" / "run1"
+        run1.mkdir(parents=True)
+        for fq in fastq_dir.iterdir():
+            shutil.copy(fq, run1 / fq.name)
+        samples_tsv = tmp_path / "samples.tsv"
+        samples_tsv.write_text(
+            "fastq_files_basename\tlane\tproject_sample\tmdc_project\tsubfolder\n"
+            "SampleA_S1_L001\tL001\tSampleA\tProj\trun1\n"
+        )
+        result = _run_snakemake(
+            "-p",
+            "--config",
+            "trimming={enabled: true}",
+            f"paths={{samples: '{samples_tsv}', fastq_folder: '{tmp_path / 'fastqs'}', output_folder: '{tmp_path / 'out'}'}}",
+        )
+        assert result.returncode == 0, result.stderr
+        assert "ftl=0" in result.stdout
+        assert "qtrim=f" in result.stdout
+        assert "quantize=" not in result.stdout

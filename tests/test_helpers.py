@@ -200,9 +200,7 @@ class TestResolveFastqPath:
             trimmed_dir="/out/trimmed",
             fastq_dir="/data/fastqs",
         )
-        assert result == os.path.join(
-            "/out/trimmed", "run1", "SampleA_S1_L001.bbduk_R1_001.fastq.gz"
-        )
+        assert result == os.path.join("/out/trimmed", "SampleA_S1_L001.bbduk_R1_001.fastq.gz")
 
     def test_r2_suffix(self, samples_df):
         result = resolve_fastq_path(

@@ -173,16 +173,16 @@ properties:
         default: "t"
       ftl:
         type: integer
-        default: 5
+        default: 0
       trimpolyg:
         type: integer
-        default: 3
+        default: 0
       trimpolya:
         type: integer
-        default: 3
+        default: 0
       qtrim:
         type: string
-        default: "t"
+        default: "f"
       trimq:
         type: integer
         default: 10
@@ -191,7 +191,7 @@ properties:
         default: 5
       quantize:
         type: string
-        default: "0,10,20,30,40,50,60"
+        default: ""
 
   qc:
     type: object

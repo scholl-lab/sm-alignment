@@ -71,13 +71,13 @@ trimming:
   hdist: 1
   tpe: "t"
   tbo: "t"
-  ftl: 5
-  trimpolyg: 3
-  trimpolya: 3
-  qtrim: "t"
+  ftl: 0
+  trimpolyg: 0
+  trimpolya: 0
+  qtrim: "f"
   trimq: 10
   ziplevel: 5
-  quantize: "0,10,20,30,40,50,60"
+  quantize: ""
 
 # --- Quality control ---
 qc:

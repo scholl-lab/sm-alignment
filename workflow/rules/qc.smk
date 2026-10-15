@@ -49,19 +49,19 @@ _FASTQC_RAW_LOOKUP: dict[str, str] = {}
 _FASTQC_TRIMMED_LOOKUP: dict[str, str] = {}
 
 for _bn in get_all_basenames():
-    _row = samples_df.loc[_bn]
-    _sub = _row.get("subfolder", "") if "subfolder" in samples_df.columns else ""
-    _raw_base = os.path.join(FASTQ_DIR, str(_sub)) if _sub else FASTQ_DIR
-
-    _FASTQC_RAW_LOOKUP[_bn + _RAW_R1_STEM] = os.path.join(_raw_base, _bn + R1_SUFFIX)
-    _FASTQC_RAW_LOOKUP[_bn + _RAW_R2_STEM] = os.path.join(_raw_base, _bn + R2_SUFFIX)
+    _FASTQC_RAW_LOOKUP[_bn + _RAW_R1_STEM] = _resolve_fastq_path_impl(
+        _bn, R1_SUFFIX, samples_df, False, TRIMMED_DIR, FASTQ_DIR
+    )
+    _FASTQC_RAW_LOOKUP[_bn + _RAW_R2_STEM] = _resolve_fastq_path_impl(
+        _bn, R2_SUFFIX, samples_df, False, TRIMMED_DIR, FASTQ_DIR
+    )
 
     if TRIMMING_ENABLED:
-        _FASTQC_TRIMMED_LOOKUP[_bn + _TRIM_R1_STEM] = os.path.join(
-            TRIMMED_DIR, _bn + TRIMMED_R1_SUFFIX
+        _FASTQC_TRIMMED_LOOKUP[_bn + _TRIM_R1_STEM] = _resolve_fastq_path_impl(
+            _bn, TRIMMED_R1_SUFFIX, samples_df, True, TRIMMED_DIR, FASTQ_DIR
         )
-        _FASTQC_TRIMMED_LOOKUP[_bn + _TRIM_R2_STEM] = os.path.join(
-            TRIMMED_DIR, _bn + TRIMMED_R2_SUFFIX
+        _FASTQC_TRIMMED_LOOKUP[_bn + _TRIM_R2_STEM] = _resolve_fastq_path_impl(
+            _bn, TRIMMED_R2_SUFFIX, samples_df, True, TRIMMED_DIR, FASTQ_DIR
         )
 
 

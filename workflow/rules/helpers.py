@@ -86,12 +86,10 @@ def resolve_fastq_path(
     Returns:
         Full path to the FASTQ file.
     """
+    if trimming_enabled:
+        return os.path.join(trimmed_dir, f"{basename}{suffix}")
     row = samples_df.loc[basename]
     subfolder = row.get("subfolder", "") if "subfolder" in samples_df.columns else ""
-    if trimming_enabled:
-        base_dir = trimmed_dir
-    else:
-        base_dir = fastq_dir
     if subfolder:
-        return os.path.join(base_dir, str(subfolder), f"{basename}{suffix}")
-    return os.path.join(base_dir, f"{basename}{suffix}")
+        return os.path.join(fastq_dir, str(subfolder), f"{basename}{suffix}")
+    return os.path.join(fastq_dir, f"{basename}{suffix}")

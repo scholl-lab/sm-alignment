@@ -632,6 +632,11 @@ class TestBuildConfigYaml:
         assert "trimming:" in result
         assert "enabled: true" in result
         assert "enabled: false" not in result
+        assert "ftl: 0" in result
+        assert "trimpolyg: 0" in result
+        assert "trimpolya: 0" in result
+        assert 'qtrim: "f"' in result
+        assert 'quantize: ""' in result
 
     def test_edit_me_not_resolved(self):
         """EDIT_ME placeholders should not be resolved by _resolve_path."""

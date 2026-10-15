@@ -3,11 +3,9 @@ TRIM_CFG = config.get("trimming", {})
 
 def _resolve_raw_fastq(wildcards, suffix):
     """Locate raw FASTQ for trimming, respecting optional subfolder."""
-    row = samples_df.loc[wildcards.basename]
-    subfolder = row.get("subfolder", "") if "subfolder" in samples_df.columns else ""
-    if subfolder:
-        return os.path.join(FASTQ_DIR, str(subfolder), f"{wildcards.basename}{suffix}")
-    return os.path.join(FASTQ_DIR, f"{wildcards.basename}{suffix}")
+    return _resolve_fastq_path_impl(
+        wildcards.basename, suffix, samples_df, False, TRIMMED_DIR, FASTQ_DIR
+    )
 
 
 rule trim_adapters:
@@ -27,12 +25,14 @@ rule trim_adapters:
         hdist=TRIM_CFG.get("hdist", 1),
         tpe=TRIM_CFG.get("tpe", "t"),
         tbo=TRIM_CFG.get("tbo", "t"),
-        ftl=TRIM_CFG.get("ftl", 5),
-        trimpolyg=TRIM_CFG.get("trimpolyg", 3),
-        trimpolya=TRIM_CFG.get("trimpolya", 3),
-        qtrim=TRIM_CFG.get("qtrim", "t"),
+        ftl=TRIM_CFG.get("ftl", 0),
+        trimpolyg=TRIM_CFG.get("trimpolyg", 0),
+        trimpolya=TRIM_CFG.get("trimpolya", 0),
+        qtrim=TRIM_CFG.get("qtrim", "f"),
         trimq=TRIM_CFG.get("trimq", 10),
-        quantize=TRIM_CFG.get("quantize", "0,10,20,30,40,50,60"),
+        quantize=(
+            f"quantize={TRIM_CFG['quantize']}" if TRIM_CFG.get("quantize", "") else ""
+        ),
     threads: 4
     resources:
         runtime=720,
@@ -51,6 +51,6 @@ rule trim_adapters:
             ktrim={params.ktrim} k={params.k} mink={params.mink} hdist={params.hdist} \
             tpe={params.tpe} tbo={params.tbo} \
             ftl={params.ftl} trimpolyg={params.trimpolyg} trimpolya={params.trimpolya} \
-            qtrim={params.qtrim} trimq={params.trimq} quantize={params.quantize} \
+            qtrim={params.qtrim} trimq={params.trimq} {params.quantize} \
             > {log} 2>&1
         """
