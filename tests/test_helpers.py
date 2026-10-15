@@ -12,10 +12,13 @@ import pytest
 # Add workflow/rules to path so we can import helpers directly
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "workflow" / "rules"))
 from helpers import (
+    format_read_group,
     get_all_basenames,
     get_basenames_for_sample,
     get_java_opts,
+    get_sample_kit,
     get_samples,
+    load_samples,
     resolve_fastq_path,
 )
 
@@ -200,9 +203,7 @@ class TestResolveFastqPath:
             trimmed_dir="/out/trimmed",
             fastq_dir="/data/fastqs",
         )
-        assert result == os.path.join(
-            "/out/trimmed", "run1", "SampleA_S1_L001.bbduk_R1_001.fastq.gz"
-        )
+        assert result == os.path.join("/out/trimmed", "SampleA_S1_L001.bbduk_R1_001.fastq.gz")
 
     def test_r2_suffix(self, samples_df):
         result = resolve_fastq_path(
@@ -214,3 +215,114 @@ class TestResolveFastqPath:
             fastq_dir="/data/fastqs",
         )
         assert result == os.path.join("/data/fastqs", "SampleB_S2_L001_R2_001.fastq.gz")
+
+
+# ============================================================================
+# TestFormatReadGroup
+# ============================================================================
+
+
+class TestFormatReadGroup:
+    """Tests for format_read_group()."""
+
+    def test_with_flowcell_and_library(self):
+        df = pd.DataFrame(
+            {
+                "fastq_files_basename": ["S1_L001", "S1_L001_run2"],
+                "lane": ["L001", "L001"],
+                "project_sample": ["APA1-T", "APA1-T"],
+                "mdc_project": ["A5297", "A5297"],
+                "flowcell": ["FC1", "FC2"],
+                "library": ["LIB1", "LIB2"],
+            }
+        ).set_index("fastq_files_basename", drop=False)
+        rg1 = format_read_group(df, "S1_L001", "ILLUMINA")
+        rg2 = format_read_group(df, "S1_L001_run2", "ILLUMINA")
+        assert rg1 == r"@RG\tID:FC1.L001.LIB1\tSM:APA1-T\tLB:LIB1\tPL:ILLUMINA\tPU:FC1.L001.LIB1"
+        assert rg2 == r"@RG\tID:FC2.L001.LIB2\tSM:APA1-T\tLB:LIB2\tPL:ILLUMINA\tPU:FC2.L001.LIB2"
+        assert rg1 != rg2
+
+    def test_fallback_to_subfolder_and_sample(self, samples_df_with_subfolder):
+        rg = format_read_group(samples_df_with_subfolder, "SampleA_S1_L001", "ILLUMINA")
+        assert (
+            rg
+            == r"@RG\tID:run1.L001.SampleA\tSM:SampleA\tLB:SampleA\tPL:ILLUMINA\tPU:run1.L001.SampleA"
+        )
+
+    def test_fallback_to_mdc_project_and_sample(self, samples_df):
+        rg = format_read_group(samples_df, "SampleA_S1_L001", "ILLUMINA")
+        assert (
+            rg
+            == r"@RG\tID:TestProject.L001.SampleA\tSM:SampleA\tLB:SampleA\tPL:ILLUMINA\tPU:TestProject.L001.SampleA"
+        )
+
+
+# ============================================================================
+# TestLoadSamples
+# ============================================================================
+
+
+class TestLoadSamples:
+    """Tests for load_samples()."""
+
+    def test_numeric_ids_and_empty_subfolder(self, tmp_path):
+        tsv = tmp_path / "samples.tsv"
+        tsv.write_text(
+            "fastq_files_basename\tlane\tproject_sample\tmdc_project\tsubfolder\n"
+            "1001_S1_L001\t1\t1001\t5297\t\n"
+            "1002_S2_L001\t2\t1002\t5297\trun2\n"
+        )
+        df = load_samples(tsv)
+        assert df.loc["1001_S1_L001", "project_sample"] == "1001"
+        assert df.loc["1001_S1_L001", "lane"] == "1"
+        assert df.loc["1001_S1_L001", "subfolder"] == ""
+        path = resolve_fastq_path(
+            "1001_S1_L001",
+            "_R1_001.fastq.gz",
+            df,
+            trimming_enabled=False,
+            trimmed_dir="/out/trimmed",
+            fastq_dir="/data/fastqs",
+        )
+        assert path == "/data/fastqs/1001_S1_L001_R1_001.fastq.gz"
+        assert "nan" not in path
+
+    def test_duplicate_basenames_rejected(self, tmp_path):
+        tsv = tmp_path / "samples.tsv"
+        tsv.write_text(
+            "fastq_files_basename\tlane\tproject_sample\tmdc_project\n"
+            "dup_S1_L001\tL001\tSampleA\tProj\n"
+            "dup_S1_L001\tL002\tSampleB\tProj\n"
+        )
+        with pytest.raises(ValueError, match="Duplicate fastq_files_basename"):
+            load_samples(tsv)
+
+    def test_path_separator_in_basename_rejected(self, tmp_path):
+        tsv = tmp_path / "samples.tsv"
+        tsv.write_text(
+            "fastq_files_basename\tlane\tproject_sample\tmdc_project\n"
+            "sub/S1_L001\tL001\tSampleA\tProj\n"
+        )
+        with pytest.raises(ValueError, match="path separators"):
+            load_samples(tsv)
+
+    def test_kit_per_sample_and_conflict_rejected(self, tmp_path):
+        tsv = tmp_path / "samples.tsv"
+        tsv.write_text(
+            "fastq_files_basename\tlane\tproject_sample\tmdc_project\tkit\n"
+            "S1_L001\tL001\tSampleA\tProj\tS33266340\n"
+            "S1_L002\tL002\tSampleA\tProj\tS33266340\n"
+            "S2_L001\tL001\tSampleB\tProj\tS33266436\n"
+        )
+        df = load_samples(tsv)
+        assert get_sample_kit(df, "SampleA") == "S33266340"
+        assert get_sample_kit(df, "SampleB") == "S33266436"
+
+        bad_tsv = tmp_path / "bad_samples.tsv"
+        bad_tsv.write_text(
+            "fastq_files_basename\tlane\tproject_sample\tmdc_project\tkit\n"
+            "S1_L001\tL001\tSampleA\tProj\tS33266340\n"
+            "S1_L002\tL002\tSampleA\tProj\tS33266436\n"
+        )
+        with pytest.raises(ValueError, match="conflicting kits"):
+            load_samples(bad_tsv)

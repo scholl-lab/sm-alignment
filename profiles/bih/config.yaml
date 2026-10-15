@@ -1,0 +1,16 @@
+# =============================================================================
+# BIH HPC cluster profile (Snakemake 8+ executor plugin)
+# =============================================================================
+# Loaded via --profile profiles/bih (auto-detected by run_snakemake.sh).
+#
+# Requires: pip install snakemake-executor-plugin-slurm
+# =============================================================================
+
+executor: slurm
+default-resources:
+  slurm_account: hpc-ag-scholl
+  slurm_partition: standard
+  mem_mb: 4000
+  runtime: 120
+jobs: 50
+latency-wait: 60

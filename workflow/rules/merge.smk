@@ -12,7 +12,7 @@ rule merge_bam_files:
         extra=config.get("params", {}).get("samtools", {}).get("merge_extra", ""),
     threads: 8
     resources:
-        runtime=1440,
+        runtime=240,
     conda:
         "../envs/bwa_samtools.yaml"
     log:
@@ -28,4 +28,10 @@ rule merge_bam_files:
             2> {log}
 
         rm -f "{params.list_file}"
+
+        SM_TAGS=$(samtools view -H "{output.merged_bam}" | awk -F'\t' '$1 == "@RG" {{for (i=2; i<=NF; i++) if ($i ~ /^SM:/) print substr($i, 4)}}' | sort -u)
+        if [ "$SM_TAGS" != "{wildcards.sample}" ]; then
+            echo "Error: expected unique @RG SM '{wildcards.sample}' in {output.merged_bam}, got '$SM_TAGS'" >> {log}
+            exit 1
+        fi
         """

@@ -8,9 +8,14 @@ ref:
   genome_gz: "analysis/ref/GRCh38/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz"
   build: "GRCh38"
   known_sites:
-    - "analysis/GATK_resource_bundle/af-only-gnomad.hg38.vcf.gz"
-    - "analysis/GATK_resource_bundle/af-only-gnomad.hg38.common_biallelic.vcf.gz"
-    - "analysis/GATK_resource_bundle/1000g_pon.hg38.vcf.gz"
+    - "analysis/GATK_resource_bundle/Homo_sapiens_assembly38.dbsnp138.vcf.gz"
+    - "analysis/GATK_resource_bundle/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"
+    - "analysis/GATK_resource_bundle/Homo_sapiens_assembly38.known_indels.vcf.gz"
+  target_intervals: ""
+
+# --- BQSR options ---
+bqsr:
+  interval_padding: 100
 
 # --- Paths ---
 # NOTE: fastq_folder should point to raw FASTQs when trimming.enabled is false,
@@ -47,12 +52,12 @@ processing:
 # --- Tool-specific extra CLI arguments (passthrough strings) ---
 params:
   bwa_mem:
-    extra: ""
+    extra: "-K 100000000 -Y"
   samtools:
     sort_extra: ""
     merge_extra: ""
   gatk:
-    MarkDuplicates: "--CREATE_INDEX true --VALIDATION_STRINGENCY SILENT"
+    MarkDuplicates: "--VALIDATION_STRINGENCY LENIENT --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500"
     BaseRecalibrator: ""
     ApplyBQSR: ""
 
@@ -66,13 +71,13 @@ trimming:
   hdist: 1
   tpe: "t"
   tbo: "t"
-  ftl: 5
-  trimpolyg: 3
-  trimpolya: 3
-  qtrim: "t"
+  ftl: 0
+  trimpolyg: 0
+  trimpolya: 0
+  qtrim: "f"
   trimq: 10
   ziplevel: 5
-  quantize: "0,10,20,30,40,50,60"
+  quantize: ""
 
 # --- Quality control ---
 qc:
@@ -83,6 +88,9 @@ qc:
   picard_collect_metrics: true  # Picard CollectMultipleMetrics on final BAM
   qualimap: false               # Qualimap bamqc — opt-in (high memory on GRCh38)
   qualimap_feature_file: ""     # BED file for Qualimap exome on-target stats
+  hs_metrics:
+    enabled: false
+    kits: {}
 
 # --- Subset BAM (optional) ---
 subset:

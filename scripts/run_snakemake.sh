@@ -48,7 +48,7 @@ conda activate snakemake 2>/dev/null || true
 
 # ---- TMPDIR setup ----
 if [[ "$CLUSTER" == "bih" ]]; then
-    BASE_TMPDIR="${HOME}/scratch/tmp"
+    BASE_TMPDIR="${TMPDIR:-${HOME}/scratch/tmp}"
 else
     BASE_TMPDIR="${TMPDIR:-/tmp}/snakemake"
 fi
@@ -64,7 +64,7 @@ export SBATCH_DEFAULTS="--output=slurm_logs/%x-%j.log"
 # ---- Cluster-specific Snakemake arguments ----
 CLUSTER_ARGS=()
 if [[ "$CLUSTER" == "bih" ]]; then
-    CLUSTER_ARGS+=(--profile=cubi-v1)
+    CLUSTER_ARGS+=(--profile profiles/bih)
 elif [[ "$CLUSTER" == "charite" ]]; then
     CLUSTER_ARGS+=(--profile profiles/charite)
 fi

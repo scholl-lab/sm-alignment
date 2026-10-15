@@ -7,21 +7,13 @@ rule bwa_map:
         bam=temp(os.path.join(ALIGNED_DIR, "{basename}.bam")),
     params:
         reference=REF,  # not REF_GZ — BWA needs index at <ref>.bwt
-        read_group=lambda wc: (
-            '"@RG\\tID:{lane}-{sample}\\tSM:{sample}\\tLB:{sample}'
-            '\\tPL:{platform}\\tPU:{lane}-{project}"'.format(
-                lane=samples_df.loc[wc.basename, "lane"],
-                sample=samples_df.loc[wc.basename, "project_sample"],
-                project=samples_df.loc[wc.basename, "mdc_project"],
-                platform=PLATFORM,
-            )
-        ),
+        read_group=lambda wc: _format_read_group_impl(samples_df, wc.basename, PLATFORM),
         sort_threads=2,
         sort_mem=4000,
-        extra=config.get("params", {}).get("bwa_mem", {}).get("extra", ""),
+        extra=config.get("params", {}).get("bwa_mem", {}).get("extra", "-K 100000000 -Y"),
     threads: 16
     resources:
-        runtime=1440,
+        runtime=480,
     conda:
         "../envs/bwa_samtools.yaml"
     log:
@@ -29,13 +21,13 @@ rule bwa_map:
         samtools=os.path.join(LOG_DIR, "map.samtools.{basename}.log"),
     shell:
         r"""
-        BWA_THREADS=$(({threads} - {params.sort_threads}))
+        BWA_THREADS=$(( {threads} > {params.sort_threads} ? {threads} - {params.sort_threads} : 1 ))
 
         TMP_SORT_DIR=$(mktemp -p {resources.tmpdir} -d samtools-sort.XXXXXX)
 
         bwa mem -t $BWA_THREADS \
             {params.extra} \
-            -R {params.read_group} \
+            -R "{params.read_group}" \
             {params.reference} \
             {input.r1} {input.r2} \
             2> {log.bwa} \

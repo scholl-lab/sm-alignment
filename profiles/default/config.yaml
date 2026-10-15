@@ -22,11 +22,6 @@ printshellcmds: true
 software-deployment-method:
   - conda
 
-# --- Default resources (baseline for ALL rules) ---
-default-resources:
-  mem_mb: 4000
-  runtime: 120
-
 # --- Per-rule thread counts ---
 set-threads:
   bwa_map: 16
@@ -37,6 +32,8 @@ set-threads:
   trim_adapters: 4
   convert_bam_to_fastq: 8
   subset_bam: 1
+  calculate_md5sum: 1
+  join_md5sums: 1
   align_and_sort: 8
   index_bam: 1
   # QC rules
@@ -45,6 +42,8 @@ set-threads:
   samtools_stats: 1
   samtools_flagstat: 1
   picard_collect_multiple_metrics: 1
+  picard_collect_hs_metrics: 1
+  picard_validate_sam: 1
   qualimap_bamqc: 4
   multiqc: 1
 
@@ -54,39 +53,47 @@ set-threads:
 set-resources:
   bwa_map:
     mem_mb: 19200
-    runtime: 1440
+    runtime: 480
     cpus_per_task: 16
   merge_bam_files:
     mem_mb: 9600
-    runtime: 1440
+    runtime: 240
     cpus_per_task: 8
   deduplicate_bam_files:
     mem_mb: 17600
-    runtime: 2880
+    runtime: 480
     cpus_per_task: 4
   base_recalibration:
     mem_mb: 17600
-    runtime: 2880
+    runtime: 480
     cpus_per_task: 4
   apply_bqsr:
     mem_mb: 17600
-    runtime: 2880
+    runtime: 480
     cpus_per_task: 4
   trim_adapters:
     mem_mb: 4000
-    runtime: 720
+    runtime: 240
     cpus_per_task: 4
   convert_bam_to_fastq:
     mem_mb: 9600
-    runtime: 1440
+    runtime: 480
     cpus_per_task: 8
   subset_bam:
     mem_mb: 4000
     runtime: 120
     cpus_per_task: 1
+  calculate_md5sum:
+    mem_mb: 4000
+    runtime: 120
+    cpus_per_task: 1
+  join_md5sums:
+    mem_mb: 4000
+    runtime: 120
+    cpus_per_task: 1
   align_and_sort:
     mem_mb: 15000
-    runtime: 1440
+    runtime: 480
     cpus_per_task: 8
   index_bam:
     mem_mb: 4000
@@ -111,11 +118,19 @@ set-resources:
     cpus_per_task: 1
   picard_collect_multiple_metrics:
     mem_mb: 8000
-    runtime: 720
+    runtime: 240
+    cpus_per_task: 1
+  picard_collect_hs_metrics:
+    mem_mb: 8000
+    runtime: 240
+    cpus_per_task: 1
+  picard_validate_sam:
+    mem_mb: 4000
+    runtime: 120
     cpus_per_task: 1
   qualimap_bamqc:
     mem_mb: 16384
-    runtime: 720
+    runtime: 240
     cpus_per_task: 4
   multiqc:
     mem_mb: 4000

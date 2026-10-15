@@ -49,19 +49,19 @@ _FASTQC_RAW_LOOKUP: dict[str, str] = {}
 _FASTQC_TRIMMED_LOOKUP: dict[str, str] = {}
 
 for _bn in get_all_basenames():
-    _row = samples_df.loc[_bn]
-    _sub = _row.get("subfolder", "") if "subfolder" in samples_df.columns else ""
-    _raw_base = os.path.join(FASTQ_DIR, str(_sub)) if _sub else FASTQ_DIR
-
-    _FASTQC_RAW_LOOKUP[_bn + _RAW_R1_STEM] = os.path.join(_raw_base, _bn + R1_SUFFIX)
-    _FASTQC_RAW_LOOKUP[_bn + _RAW_R2_STEM] = os.path.join(_raw_base, _bn + R2_SUFFIX)
+    _FASTQC_RAW_LOOKUP[_bn + _RAW_R1_STEM] = _resolve_fastq_path_impl(
+        _bn, R1_SUFFIX, samples_df, False, TRIMMED_DIR, FASTQ_DIR
+    )
+    _FASTQC_RAW_LOOKUP[_bn + _RAW_R2_STEM] = _resolve_fastq_path_impl(
+        _bn, R2_SUFFIX, samples_df, False, TRIMMED_DIR, FASTQ_DIR
+    )
 
     if TRIMMING_ENABLED:
-        _FASTQC_TRIMMED_LOOKUP[_bn + _TRIM_R1_STEM] = os.path.join(
-            TRIMMED_DIR, _bn + TRIMMED_R1_SUFFIX
+        _FASTQC_TRIMMED_LOOKUP[_bn + _TRIM_R1_STEM] = _resolve_fastq_path_impl(
+            _bn, TRIMMED_R1_SUFFIX, samples_df, True, TRIMMED_DIR, FASTQ_DIR
         )
-        _FASTQC_TRIMMED_LOOKUP[_bn + _TRIM_R2_STEM] = os.path.join(
-            TRIMMED_DIR, _bn + TRIMMED_R2_SUFFIX
+        _FASTQC_TRIMMED_LOOKUP[_bn + _TRIM_R2_STEM] = _resolve_fastq_path_impl(
+            _bn, TRIMMED_R2_SUFFIX, samples_df, True, TRIMMED_DIR, FASTQ_DIR
         )
 
 
@@ -179,16 +179,11 @@ rule picard_collect_multiple_metrics:
             _PICARD_PREFIX,
             ".alignment_summary_metrics",
             ".insert_size_metrics",
-            ".insert_size_histogram.pdf",
             ".quality_distribution_metrics",
-            ".quality_distribution.pdf",
             ".quality_by_cycle_metrics",
-            ".quality_by_cycle.pdf",
             ".base_distribution_by_cycle_metrics",
-            ".base_distribution_by_cycle.pdf",
             ".gc_bias.detail_metrics",
             ".gc_bias.summary_metrics",
-            ".gc_bias.pdf",
             ".bait_bias_detail_metrics",
             ".bait_bias_summary_metrics",
             ".error_summary_metrics",
@@ -222,6 +217,86 @@ rule picard_collect_multiple_metrics:
             --PROGRAM CollectSequencingArtifactMetrics \
             --PROGRAM CollectQualityYieldMetrics \
             2> {log}
+        """
+
+
+# =============================================================================
+# Picard CollectHsMetrics (via GATK4, per capture kit)
+# =============================================================================
+HS_METRICS_CFG = QC_CFG.get("hs_metrics", {})
+HS_METRICS_ENABLED = HS_METRICS_CFG.get("enabled", False)
+
+
+def _get_hs_kit_config(sample):
+    """Return {bait_intervals, target_intervals} dict for a sample's capture kit."""
+    kits_cfg = HS_METRICS_CFG.get("kits", {})
+    kit = _get_sample_kit_impl(samples_df, sample)
+    if not kit or kit not in kits_cfg:
+        raise ValueError(f"Sample '{sample}' kit '{kit}' not found in qc.hs_metrics.kits")
+    return kits_cfg[kit]
+
+
+rule picard_collect_hs_metrics:
+    """Collect hybrid-selection (exome capture) metrics with GATK CollectHsMetrics."""
+    input:
+        bam=os.path.join(BQSR_DIR, "{sample}" + FINAL_BAM_SUFFIX),
+        ref=REF,
+        baits=lambda wc: _get_hs_kit_config(wc.sample)["bait_intervals"],
+        targets=lambda wc: _get_hs_kit_config(wc.sample)["target_intervals"],
+    output:
+        os.path.join(PICARD_QC_DIR, "{sample}.hs_metrics.txt"),
+    params:
+        java_opts=get_java_opts,
+        extra=config.get("params", {}).get("gatk", {}).get("CollectHsMetrics", ""),
+    threads: 1
+    conda:
+        "../envs/gatk.yaml"
+    log:
+        os.path.join(LOG_DIR, "picard_hs_metrics.{sample}.log"),
+    shell:
+        r"""
+        gatk --java-options '{params.java_opts}' CollectHsMetrics \
+            {params.extra} \
+            -I "{input.bam}" \
+            -R "{input.ref}" \
+            --BAIT_INTERVALS "{input.baits}" \
+            --TARGET_INTERVALS "{input.targets}" \
+            -O "{output}" \
+            2> {log}
+        """
+
+
+# =============================================================================
+# Picard ValidateSamFile (via GATK4)
+# =============================================================================
+rule picard_validate_sam:
+    """Validate final BAM structure and SAM tags with GATK ValidateSamFile."""
+    input:
+        bam=os.path.join(BQSR_DIR, "{sample}" + FINAL_BAM_SUFFIX),
+        ref=REF,
+    output:
+        os.path.join(PICARD_QC_DIR, "{sample}.validate_sam.txt"),
+    params:
+        java_opts=get_java_opts,
+        extra=config.get("params", {}).get("gatk", {}).get("ValidateSamFile", ""),
+    threads: 1
+    conda:
+        "../envs/gatk.yaml"
+    log:
+        os.path.join(LOG_DIR, "picard_validate_sam.{sample}.log"),
+    shell:
+        r"""
+        rc=0
+        gatk --java-options '{params.java_opts}' ValidateSamFile \
+            --IGNORE_WARNINGS true \
+            {params.extra} \
+            -I "{input.bam}" \
+            -R "{input.ref}" \
+            -M SUMMARY \
+            -O "{output}" \
+            2> {log} || rc=$?
+        [ -s "{output}" ] && cat "{output}" >> {log}
+        exit $rc
         """
 
 
@@ -302,6 +377,22 @@ def _collect_multiqc_inputs(wildcards):
                     PICARD_QC_DIR,
                     "{sample}.multiple_metrics.alignment_summary_metrics",
                 ),
+                sample=all_samples,
+            )
+        )
+
+    if QC_CFG.get("picard_validate_sam", True):
+        inputs.extend(
+            expand(
+                os.path.join(PICARD_QC_DIR, "{sample}.validate_sam.txt"),
+                sample=all_samples,
+            )
+        )
+
+    if HS_METRICS_ENABLED:
+        inputs.extend(
+            expand(
+                os.path.join(PICARD_QC_DIR, "{sample}.hs_metrics.txt"),
                 sample=all_samples,
             )
         )

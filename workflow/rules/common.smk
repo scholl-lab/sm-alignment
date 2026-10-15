@@ -1,10 +1,12 @@
 import os
-import pandas as pd
 from rules.helpers import (
+    format_read_group as _format_read_group_impl,
     get_java_opts as _get_java_opts_impl,
+    get_sample_kit as _get_sample_kit_impl,
     get_samples as _get_samples_impl,
     get_all_basenames as _get_all_basenames_impl,
     get_basenames_for_sample as _get_basenames_impl,
+    load_samples as _load_samples_impl,
     resolve_fastq_path as _resolve_fastq_path_impl,
 )
 
@@ -16,6 +18,8 @@ REF = config["ref"]["genome"]
 REF_GZ = config["ref"].get("genome_gz", "") or REF
 REF_BUILD = config["ref"]["build"]
 KNOWN_SITES = config["ref"]["known_sites"]
+TARGET_INTERVALS = config["ref"].get("target_intervals", "")
+BQSR_INTERVAL_PADDING = config.get("bqsr", {}).get("interval_padding", 100)
 
 FASTQ_DIR = config["paths"]["fastq_folder"]
 OUTPUT_DIR = config["paths"]["output_folder"]
@@ -60,9 +64,7 @@ QC_DIR = os.path.join(OUTPUT_DIR, "qc")
 # =============================================================================
 # Samples metadata
 # =============================================================================
-samples_df = pd.read_table(config["paths"]["samples"]).set_index(
-    "fastq_files_basename", drop=False
-)
+samples_df = _load_samples_impl(config["paths"]["samples"])
 
 
 def get_samples():

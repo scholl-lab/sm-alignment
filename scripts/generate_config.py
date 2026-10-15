@@ -808,6 +808,11 @@ ref:
   build: "{build}"
   known_sites:
 {ks_lines}
+  target_intervals: ""
+
+# --- BQSR options ---
+bqsr:
+  interval_padding: 100
 
 # --- Paths ---
 paths:
@@ -842,12 +847,12 @@ processing:
 # --- Tool-specific extra CLI arguments (passthrough strings) ---
 params:
   bwa_mem:
-    extra: ""
+    extra: "-K 100000000 -Y"
   samtools:
     sort_extra: ""
     merge_extra: ""
   gatk:
-    MarkDuplicates: "--CREATE_INDEX true --VALIDATION_STRINGENCY SILENT"
+    MarkDuplicates: "--VALIDATION_STRINGENCY LENIENT --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500"
     BaseRecalibrator: ""
     ApplyBQSR: ""
 
@@ -861,13 +866,13 @@ trimming:
   hdist: 1
   tpe: "t"
   tbo: "t"
-  ftl: 5
-  trimpolyg: 3
-  trimpolya: 3
-  qtrim: "t"
+  ftl: 0
+  trimpolyg: 0
+  trimpolya: 0
+  qtrim: "f"
   trimq: 10
   ziplevel: 5
-  quantize: "0,10,20,30,40,50,60"
+  quantize: ""
 
 # --- Subset BAM (optional) ---
 subset:

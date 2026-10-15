@@ -1,18 +1,31 @@
+import re
+
+
 rule deduplicate_bam_files:
     """Mark PCR duplicates with GATK MarkDuplicates."""
     input:
         merged_bam=os.path.join(MERGED_DIR, "{sample}" + MERGED_SUFFIX),
     output:
         dedup_bam=temp(os.path.join(DEDUP_DIR, "{sample}" + DEDUP_SUFFIX)),
+        dedup_bai=temp(
+            os.path.join(DEDUP_DIR, "{sample}" + DEDUP_SUFFIX.removesuffix(".bam") + ".bai")
+        ),
         metrics=os.path.join(DEDUP_DIR, "{sample}" + DEDUP_METRICS_SUFFIX),
     params:
         java_opts=get_java_opts,
-        extra=config.get("params", {})
-        .get("gatk", {})
-        .get("MarkDuplicates", "--CREATE_INDEX true --VALIDATION_STRINGENCY SILENT"),
+        extra=re.sub(
+            r"--CREATE_INDEX(?:\s+|=)\S+",
+            "",
+            config.get("params", {})
+            .get("gatk", {})
+            .get(
+                "MarkDuplicates",
+                "--VALIDATION_STRINGENCY LENIENT --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500",
+            ),
+        ).strip(),
     threads: 4
     resources:
-        runtime=4320,
+        runtime=480,
     conda:
         "../envs/gatk.yaml"
     log:
@@ -20,6 +33,7 @@ rule deduplicate_bam_files:
     shell:
         r"""
         gatk --java-options '{params.java_opts}' MarkDuplicates \
+            --CREATE_INDEX true \
             {params.extra} \
             -I "{input.merged_bam}" \
             -O "{output.dedup_bam}" \

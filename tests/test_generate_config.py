@@ -632,12 +632,71 @@ class TestBuildConfigYaml:
         assert "trimming:" in result
         assert "enabled: true" in result
         assert "enabled: false" not in result
+        assert "ftl: 0" in result
+        assert "trimpolyg: 0" in result
+        assert "trimpolya: 0" in result
+        assert 'qtrim: "f"' in result
+        assert 'quantize: ""' in result
 
     def test_edit_me_not_resolved(self):
         """EDIT_ME placeholders should not be resolved by _resolve_path."""
         ref_data = {"genome": "", "genome_gz": "", "build": "GRCh38", "known_sites": []}
         result = gc._build_config_yaml(ref_data, "/fastqs", "/output", "samples.tsv")
         assert "EDIT_ME" in result
+
+    def test_bqsr_intervals_and_repo_known_sites(self):
+        """Generated config has target_intervals/bqsr.interval_padding and repo config uses GATK BQSR sites."""
+        ref_data = {
+            "genome": "/ref.fna",
+            "genome_gz": "",
+            "build": "GRCh38",
+            "known_sites": ["/ks.vcf.gz"],
+        }
+        result = gc._build_config_yaml(ref_data, "/fastqs", "/output", "samples.tsv")
+        assert 'target_intervals: ""' in result
+        assert "bqsr:" in result
+        assert "interval_padding: 100" in result
+
+        repo_cfg = (Path(__file__).resolve().parent.parent / "config" / "config.yaml").read_text()
+        assert "Homo_sapiens_assembly38.dbsnp138.vcf.gz" in repo_cfg
+        assert "Mills_and_1000G_gold_standard.indels.hg38.vcf.gz" in repo_cfg
+        assert "Homo_sapiens_assembly38.known_indels.vcf.gz" in repo_cfg
+        assert "af-only-gnomad" not in repo_cfg
+        assert "1000g_pon" not in repo_cfg
+
+    def test_mark_duplicates_and_dedup_defaults(self):
+        """Generated and repo configs use LENIENT and OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500."""
+        ref_data = {
+            "genome": "/ref.fna",
+            "genome_gz": "",
+            "build": "GRCh38",
+            "known_sites": ["/ks.vcf.gz"],
+        }
+        result = gc._build_config_yaml(ref_data, "/fastqs", "/output", "samples.tsv")
+        expected = "--VALIDATION_STRINGENCY LENIENT --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500"
+        assert expected in result
+        repo_root = Path(__file__).resolve().parent.parent
+        assert expected in (repo_root / "config" / "config.yaml").read_text()
+
+    def test_bih_profile_and_runtimes(self):
+        """BIH SLURM profile exists and profile runtimes are <=480."""
+        import yaml
+
+        repo_root = Path(__file__).resolve().parent.parent
+        bih_cfg = yaml.safe_load((repo_root / "profiles" / "bih" / "config.yaml").read_text())
+        assert bih_cfg["executor"] == "slurm"
+        assert bih_cfg["jobs"] == 50
+        assert bih_cfg["latency-wait"] == 60
+        assert bih_cfg["default-resources"]["slurm_account"] == "hpc-ag-scholl"
+        assert bih_cfg["default-resources"]["slurm_partition"] == "standard"
+        assert bih_cfg["default-resources"]["runtime"] <= 480
+
+        default_cfg = yaml.safe_load(
+            (repo_root / "profiles" / "default" / "config.yaml").read_text()
+        )
+        assert "default-resources" not in default_cfg
+        for rule_name, res in default_cfg["set-resources"].items():
+            assert res["runtime"] <= 480, f"{rule_name} runtime {res['runtime']} > 480"
 
 
 # ============================================================================

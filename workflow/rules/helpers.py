@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import os
 
+import pandas as pd
+
 
 def get_java_opts(resources_mem_mb: int, tmpdir: str) -> str:
     """Derive GATK --java-options from allocated resources.
@@ -86,12 +88,80 @@ def resolve_fastq_path(
     Returns:
         Full path to the FASTQ file.
     """
+    if trimming_enabled:
+        return os.path.join(trimmed_dir, f"{basename}{suffix}")
     row = samples_df.loc[basename]
     subfolder = row.get("subfolder", "") if "subfolder" in samples_df.columns else ""
-    if trimming_enabled:
-        base_dir = trimmed_dir
-    else:
-        base_dir = fastq_dir
-    if subfolder:
-        return os.path.join(base_dir, str(subfolder), f"{basename}{suffix}")
-    return os.path.join(base_dir, f"{basename}{suffix}")
+    if subfolder and str(subfolder).strip():
+        return os.path.join(fastq_dir, str(subfolder).strip(), f"{basename}{suffix}")
+    return os.path.join(fastq_dir, f"{basename}{suffix}")
+
+
+def load_samples(path: str | os.PathLike[str]) -> pd.DataFrame:
+    """Load and validate samples.tsv with string columns and no NaN coercion."""
+    df = pd.read_table(path, dtype=str, keep_default_na=False)
+    if df.empty:
+        raise ValueError(f"Samples table is empty: {path}")
+    if "fastq_files_basename" not in df.columns:
+        raise ValueError(f"Missing required column 'fastq_files_basename' in {path}")
+    basenames = df["fastq_files_basename"]
+    if (basenames.str.strip() == "").any():
+        raise ValueError(f"Empty fastq_files_basename entry in {path}")
+    if basenames.str.contains(r"[/\\]", regex=True).any():
+        raise ValueError(f"fastq_files_basename must not contain path separators in {path}")
+    if basenames.duplicated().any():
+        dups = sorted(basenames[basenames.duplicated()].unique().tolist())
+        raise ValueError(f"Duplicate fastq_files_basename entries in {path}: {dups}")
+    if "kit" in df.columns and "project_sample" in df.columns:
+        for sample, grp in df.groupby("project_sample"):
+            kits = {str(k).strip() for k in grp["kit"]}
+            if len(kits) > 1:
+                raise ValueError(
+                    f"Sample '{sample}' has conflicting kits in {path}: {sorted(kits)}"
+                )
+    return df.set_index("fastq_files_basename", drop=False)
+
+
+def get_sample_kit(samples_df, sample: str) -> str:
+    """Return the capture kit identifier for a sample (or '' if unset)."""
+    if "kit" not in samples_df.columns:
+        return ""
+    vals = {
+        str(k).strip()
+        for k in samples_df.loc[samples_df["project_sample"] == sample, "kit"]
+        if str(k).strip()
+    }
+    return next(iter(vals)) if vals else ""
+
+
+def format_read_group(
+    samples_df,
+    basename: str,
+    platform: str = "ILLUMINA",
+) -> str:
+    """Format @RG header string for a FASTQ basename row in samples_df.
+
+    Produces ID:{flowcell}.{lane}.{library}, SM:{sample}, LB:{library},
+    PL:{platform}, PU:{flowcell}.{lane}.{library}, falling back to
+    subfolder/mdc_project and project_sample when flowcell/library are omitted.
+    """
+    row = samples_df.loc[basename]
+    sample = str(row["project_sample"]).strip()
+    lane = str(row["lane"]).strip()
+
+    flowcell = ""
+    for col in ("flowcell", "subfolder", "mdc_project"):
+        if col in samples_df.columns:
+            val = row.get(col, "")
+            if val is not None and str(val).strip():
+                flowcell = str(val).strip()
+                break
+
+    library = sample
+    if "library" in samples_df.columns:
+        val = row.get("library", "")
+        if val is not None and str(val).strip():
+            library = str(val).strip()
+
+    rg_id = f"{flowcell}.{lane}.{library}"
+    return f"@RG\\tID:{rg_id}\\tSM:{sample}\\tLB:{library}\\tPL:{platform}\\tPU:{rg_id}"
