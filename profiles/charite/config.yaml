@@ -4,7 +4,7 @@
 # Loaded via --profile profiles/charite (auto-detected by run_snakemake.sh).
 #
 # The Charité cluster has no system-wide Snakemake profile, so we provide
-# SLURM executor settings here. On BIH HPC, cubi-v1 serves this role.
+# SLURM executor settings here. On BIH HPC, profiles/bih serves this role.
 #
 # Requires: pip install snakemake-executor-plugin-slurm
 #

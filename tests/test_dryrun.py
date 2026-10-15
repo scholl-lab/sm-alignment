@@ -180,7 +180,7 @@ class TestDryRun:
         assert result.returncode == 0, result.stderr
         assert "-K 100000000 -Y" in result.stdout
 
-    def test_dedup_and_validate_sam(self):
+    def test_dedup_and_validate_sam(self, tmp_path):
         """Dry-run includes OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500, tracks dedup_bai, and schedules picard_validate_sam."""
         result = _run_snakemake("-p")
         assert result.returncode == 0, result.stderr
@@ -188,7 +188,21 @@ class TestDryRun:
         assert "--OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500" in result.stdout
         assert ".merged.dedup.bai" in result.stdout
         assert "rule picard_validate_sam:" in result.stdout
+        assert "--IGNORE_WARNINGS true" in result.stdout
         assert ".pdf" not in result.stdout
+
+        legacy_cfg = _write_config(
+            tmp_path,
+            params={
+                "gatk": {"MarkDuplicates": "--CREATE_INDEX true --VALIDATION_STRINGENCY SILENT"}
+            },
+        )
+        legacy_res = _run_snakemake("-p", config=legacy_cfg)
+        assert legacy_res.returncode == 0, legacy_res.stderr
+        assert "--VALIDATION_STRINGENCY SILENT" in legacy_res.stdout
+        for block in legacy_res.stdout.split("rule "):
+            if block.startswith("deduplicate_bam_files:"):
+                assert block.count("--CREATE_INDEX") == 1
 
     def test_default_profile_runtimes(self, tmp_path):
         """Dry-run with --workflow-profile profiles/default and profiles/bih resolves runtimes <=480 and slurm_account."""
@@ -231,7 +245,7 @@ class TestDryRun:
             "fastq_files_basename\tlane\tproject_sample\tmdc_project\tkit\n"
             "SampleA_S1_L001\tL001\tSampleA\tTestProject\tS33266340\n"
             "SampleA_S1_L002\tL002\tSampleA\tTestProject\tS33266340\n"
-            "SampleB_S2_L001\tL001\tSampleB\tTestProject\t\n"
+            "SampleB_S2_L001\tL001\tSampleB\tTestProject\tS33266340\n"
         )
         cfg = _write_config(
             tmp_path,

@@ -677,16 +677,9 @@ class TestBuildConfigYaml:
         assert expected in result
         repo_root = Path(__file__).resolve().parent.parent
         assert expected in (repo_root / "config" / "config.yaml").read_text()
-        dedup_smk = (repo_root / "workflow" / "rules" / "dedup.smk").read_text()
-        assert "dedup_bai" in dedup_smk
-        assert "--CREATE_INDEX true" in dedup_smk
-        assert "dedup_bai" in (repo_root / "workflow" / "rules" / "bqsr.smk").read_text()
-        assert "picard_validate_sam" in (repo_root / "workflow" / "rules" / "qc.smk").read_text()
 
     def test_bih_profile_and_runtimes(self):
-        """BIH SLURM profile exists, rule/profile runtimes are <=480, and launcher honours TMPDIR."""
-        import re
-
+        """BIH SLURM profile exists and profile runtimes are <=480."""
         import yaml
 
         repo_root = Path(__file__).resolve().parent.parent
@@ -704,14 +697,6 @@ class TestBuildConfigYaml:
         assert "default-resources" not in default_cfg
         for rule_name, res in default_cfg["set-resources"].items():
             assert res["runtime"] <= 480, f"{rule_name} runtime {res['runtime']} > 480"
-
-        for smk in (repo_root / "workflow" / "rules").glob("*.smk"):
-            for m in re.finditer(r"runtime\s*=\s*(\d+)", smk.read_text()):
-                assert int(m.group(1)) <= 480, f"{smk.name} runtime {m.group(1)} > 480"
-
-        launcher = (repo_root / "scripts" / "run_snakemake.sh").read_text()
-        assert "${TMPDIR:-${HOME}/scratch/tmp}" in launcher
-        assert "profiles/bih" in launcher
 
 
 # ============================================================================

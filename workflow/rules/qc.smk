@@ -231,15 +231,9 @@ def _get_hs_kit_config(sample):
     """Return {bait_intervals, target_intervals} dict for a sample's capture kit."""
     kits_cfg = HS_METRICS_CFG.get("kits", {})
     kit = _get_sample_kit_impl(samples_df, sample)
-    if kit:
-        if kit not in kits_cfg:
-            raise ValueError(f"Sample '{sample}' kit '{kit}' not found in qc.hs_metrics.kits")
-        return kits_cfg[kit]
-    if len(kits_cfg) == 1:
-        return next(iter(kits_cfg.values()))
-    raise ValueError(
-        f"Sample '{sample}' has no kit and qc.hs_metrics.kits does not have a single kit"
-    )
+    if not kit or kit not in kits_cfg:
+        raise ValueError(f"Sample '{sample}' kit '{kit}' not found in qc.hs_metrics.kits")
+    return kits_cfg[kit]
 
 
 rule picard_collect_hs_metrics:
@@ -294,6 +288,7 @@ rule picard_validate_sam:
         r"""
         rc=0
         gatk --java-options '{params.java_opts}' ValidateSamFile \
+            --IGNORE_WARNINGS true \
             {params.extra} \
             -I "{input.bam}" \
             -R "{input.ref}" \

@@ -32,6 +32,8 @@ set-threads:
   trim_adapters: 4
   convert_bam_to_fastq: 8
   subset_bam: 1
+  calculate_md5sum: 1
+  join_md5sums: 1
   align_and_sort: 8
   index_bam: 1
   # QC rules
@@ -78,6 +80,14 @@ set-resources:
     runtime: 480
     cpus_per_task: 8
   subset_bam:
+    mem_mb: 4000
+    runtime: 120
+    cpus_per_task: 1
+  calculate_md5sum:
+    mem_mb: 4000
+    runtime: 120
+    cpus_per_task: 1
+  join_md5sums:
     mem_mb: 4000
     runtime: 120
     cpus_per_task: 1

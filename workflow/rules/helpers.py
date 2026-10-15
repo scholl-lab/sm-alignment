@@ -131,8 +131,6 @@ def get_sample_kit(samples_df, sample: str) -> str:
         for k in samples_df.loc[samples_df["project_sample"] == sample, "kit"]
         if str(k).strip()
     }
-    if len(vals) > 1:
-        raise ValueError(f"Sample '{sample}' has conflicting kits: {sorted(vals)}")
     return next(iter(vals)) if vals else ""
 
 
