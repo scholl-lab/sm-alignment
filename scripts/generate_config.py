@@ -808,6 +808,11 @@ ref:
   build: "{build}"
   known_sites:
 {ks_lines}
+  target_intervals: ""
+
+# --- BQSR options ---
+bqsr:
+  interval_padding: 100
 
 # --- Paths ---
 paths:

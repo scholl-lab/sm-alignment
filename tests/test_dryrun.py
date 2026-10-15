@@ -111,3 +111,20 @@ class TestDryRun:
             "multiqc",
         ):
             assert rule in result.stdout, f"Expected QC rule '{rule}' not in --list-rules output"
+
+    def test_bqsr_target_intervals(self, tmp_path):
+        """Dry-run with ref.target_intervals set emits -L and --interval-padding on base_recalibration only."""
+        bed = tmp_path / "targets.bed"
+        bed.write_text("chr1\t0\t1000\n")
+        result = _run_snakemake("-p", "--config", f"ref={{target_intervals: '{bed}'}}")
+        assert result.returncode == 0, result.stderr
+        assert f'-L "{bed}" --interval-padding 100' in result.stdout
+        assert "ApplyBQSR" in result.stdout
+        for block in result.stdout.split("rule "):
+            if block.startswith("apply_bqsr:"):
+                assert "-L " not in block
+
+        missing = tmp_path / "missing.bed"
+        fail_res = _run_snakemake("--config", f"ref={{target_intervals: '{missing}'}}")
+        assert fail_res.returncode != 0
+        assert "MissingInputException" in (fail_res.stdout + fail_res.stderr)

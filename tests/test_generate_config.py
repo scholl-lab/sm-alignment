@@ -639,6 +639,26 @@ class TestBuildConfigYaml:
         result = gc._build_config_yaml(ref_data, "/fastqs", "/output", "samples.tsv")
         assert "EDIT_ME" in result
 
+    def test_bqsr_intervals_and_repo_known_sites(self):
+        """Generated config has target_intervals/bqsr.interval_padding and repo config uses GATK BQSR sites."""
+        ref_data = {
+            "genome": "/ref.fna",
+            "genome_gz": "",
+            "build": "GRCh38",
+            "known_sites": ["/ks.vcf.gz"],
+        }
+        result = gc._build_config_yaml(ref_data, "/fastqs", "/output", "samples.tsv")
+        assert 'target_intervals: ""' in result
+        assert "bqsr:" in result
+        assert "interval_padding: 100" in result
+
+        repo_cfg = (Path(__file__).resolve().parent.parent / "config" / "config.yaml").read_text()
+        assert "Homo_sapiens_assembly38.dbsnp138.vcf.gz" in repo_cfg
+        assert "Mills_and_1000G_gold_standard.indels.hg38.vcf.gz" in repo_cfg
+        assert "Homo_sapiens_assembly38.known_indels.vcf.gz" in repo_cfg
+        assert "af-only-gnomad" not in repo_cfg
+        assert "1000g_pon" not in repo_cfg
+
 
 # ============================================================================
 # TestWriteSamplesTsv

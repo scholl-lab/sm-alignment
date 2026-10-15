@@ -16,6 +16,8 @@ REF = config["ref"]["genome"]
 REF_GZ = config["ref"].get("genome_gz", "") or REF
 REF_BUILD = config["ref"]["build"]
 KNOWN_SITES = config["ref"]["known_sites"]
+TARGET_INTERVALS = config["ref"].get("target_intervals", "")
+BQSR_INTERVAL_PADDING = config.get("bqsr", {}).get("interval_padding", 100)
 
 FASTQ_DIR = config["paths"]["fastq_folder"]
 OUTPUT_DIR = config["paths"]["output_folder"]
