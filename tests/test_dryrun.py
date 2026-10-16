@@ -333,3 +333,22 @@ class TestDryRun:
         assert not conda_file.exists()
         logged_args = args_file.read_text().splitlines()
         assert str(REPO_ROOT / "profiles" / "default") in logged_args
+
+        cli_only_res = subprocess.run(
+            [
+                "snakemake",
+                "-s",
+                str(SNAKEFILE),
+                "--list-rules",
+                "--config",
+                f'paths={{"samples": "{REPO_ROOT / "tests/data/config/samples.tsv"}"}}',
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert cli_only_res.returncode == 0, (
+            f"CLI-only --config failed:\nstdout: {cli_only_res.stdout}\nstderr: {cli_only_res.stderr}"
+        )
+        assert "bwa_map" in cli_only_res.stdout
