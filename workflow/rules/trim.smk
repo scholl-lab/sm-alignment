@@ -17,6 +17,7 @@ rule trim_adapters:
         trimmed_r1=os.path.join(TRIMMED_DIR, "{basename}" + TRIMMED_R1_SUFFIX),
         trimmed_r2=os.path.join(TRIMMED_DIR, "{basename}" + TRIMMED_R2_SUFFIX),
     params:
+        xmx=lambda wc, resources: int(resources.mem_mb * 0.85),
         ref=TRIM_CFG.get("bbduk_ref", "adapters,artifacts"),
         ziplevel=TRIM_CFG.get("ziplevel", 5),
         ktrim=TRIM_CFG.get("ktrim", "r"),
@@ -41,6 +42,7 @@ rule trim_adapters:
     shell:
         r"""
         bbduk.sh \
+            -Xmx{params.xmx}m \
             threads={threads} \
             in={input.r1} in2={input.r2} \
             out={output.trimmed_r1} out2={output.trimmed_r2} \
