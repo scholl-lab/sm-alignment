@@ -679,7 +679,9 @@ class TestBuildConfigYaml:
         assert expected in (repo_root / "config" / "config.yaml").read_text()
 
     def test_bih_profile_and_runtimes(self):
-        """BIH SLURM profile exists and profile runtimes are <=480."""
+        """All profile YAMLs use explicit time units (not bare ints) <=480m for runtime."""
+        import re
+
         import yaml
 
         repo_root = Path(__file__).resolve().parent.parent
@@ -689,14 +691,31 @@ class TestBuildConfigYaml:
         assert bih_cfg["latency-wait"] == 60
         assert bih_cfg["default-resources"]["slurm_account"] == "hpc-ag-scholl"
         assert bih_cfg["default-resources"]["slurm_partition"] == "standard"
-        assert bih_cfg["default-resources"]["runtime"] <= 480
 
         default_cfg = yaml.safe_load(
             (repo_root / "profiles" / "default" / "config.yaml").read_text()
         )
         assert "default-resources" not in default_cfg
-        for rule_name, res in default_cfg["set-resources"].items():
-            assert res["runtime"] <= 480, f"{rule_name} runtime {res['runtime']} > 480"
+
+        profile_files = sorted((repo_root / "profiles").glob("*/config*.yaml"))
+        assert len(profile_files) >= 3
+        for profile_path in profile_files:
+            cfg = yaml.safe_load(profile_path.read_text())
+            if "default-resources" in cfg and "runtime" in cfg["default-resources"]:
+                rt = cfg["default-resources"]["runtime"]
+                assert isinstance(rt, str) and not rt.isdigit(), (
+                    f"{profile_path}: default-resources.runtime={rt!r} must have explicit unit"
+                )
+                m = re.fullmatch(r"(\d+)m", rt)
+                assert m is not None and int(m.group(1)) <= 480
+            for rule_name, res in cfg.get("set-resources", {}).items():
+                if "runtime" in res:
+                    rt = res["runtime"]
+                    assert isinstance(rt, str) and not rt.isdigit(), (
+                        f"{profile_path} ({rule_name}): runtime={rt!r} must have explicit unit"
+                    )
+                    m = re.fullmatch(r"(\d+)m", rt)
+                    assert m is not None and int(m.group(1)) <= 480
 
 
 # ============================================================================
