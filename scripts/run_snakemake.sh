@@ -39,12 +39,15 @@ CLUSTER=$(detect_cluster)
 SNAKEFILE="${1:?Error: SNAKEFILE path required as first argument}"
 CONFIG_FILE="${2:-config/config.yaml}"
 shift 2 2>/dev/null || shift 1 2>/dev/null || true
+REPO_ROOT="$(cd "$(dirname "${SNAKEFILE}")/.." && pwd)"
 
 # ---- Conda activation (Charité requires explicit sourcing) ----
-if [[ "$CLUSTER" == "charite" ]] && [[ -f /etc/profile.d/conda.sh ]]; then
-    source /etc/profile.d/conda.sh
+if ! command -v snakemake >/dev/null 2>&1; then
+    if [[ "$CLUSTER" == "charite" ]] && [[ -f /etc/profile.d/conda.sh ]]; then
+        source /etc/profile.d/conda.sh
+    fi
+    conda activate "${SNAKEMAKE_CONDA_ENV:-snakemake}" 2>/dev/null || true
 fi
-conda activate snakemake 2>/dev/null || true
 
 # ---- TMPDIR setup ----
 if [[ "$CLUSTER" == "bih" ]]; then
@@ -64,9 +67,9 @@ export SBATCH_DEFAULTS="--output=slurm_logs/%x-%j.log"
 # ---- Cluster-specific Snakemake arguments ----
 CLUSTER_ARGS=()
 if [[ "$CLUSTER" == "bih" ]]; then
-    CLUSTER_ARGS+=(--profile profiles/bih)
+    CLUSTER_ARGS+=(--profile "${REPO_ROOT}/profiles/bih")
 elif [[ "$CLUSTER" == "charite" ]]; then
-    CLUSTER_ARGS+=(--profile profiles/charite)
+    CLUSTER_ARGS+=(--profile "${REPO_ROOT}/profiles/charite")
 fi
 
 # ---- Launch ----
@@ -82,7 +85,7 @@ echo "========================"
 snakemake \
     -s "${SNAKEFILE}" \
     --configfile "${CONFIG_FILE}" \
-    --workflow-profile profiles/default \
+    --workflow-profile "${REPO_ROOT}/profiles/default" \
     "${CLUSTER_ARGS[@]}" \
     "$@"
 

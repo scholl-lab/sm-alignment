@@ -6,6 +6,7 @@ that the workflow loads correctly and rules are defined.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -271,3 +272,83 @@ class TestDryRun:
         assert "SampleB.hs_metrics.txt" in result.stdout
         assert f'--BAIT_INTERVALS "{baits}"' in result.stdout
         assert f'--TARGET_INTERVALS "{targets}"' in result.stdout
+
+    def test_external_staging_directory(self, tmp_path):
+        """Invoking snakemake -s workflow/Snakefile --configfile ... -n from an empty temp dir succeeds."""
+        stage_dir = tmp_path / "stage"
+        stage_dir.mkdir()
+        cfg = _write_config(
+            tmp_path,
+            "stage_config.yaml",
+            ref={
+                "genome": str(REPO_ROOT / "tests" / "data" / "ref" / "dummy.fna"),
+                "known_sites": [
+                    str(REPO_ROOT / "tests" / "data" / "known_sites" / "dbsnp_mini.vcf.gz"),
+                    str(
+                        REPO_ROOT
+                        / "tests"
+                        / "data"
+                        / "known_sites"
+                        / "Mills_and_1000G_mini.vcf.gz"
+                    ),
+                ],
+            },
+            paths={
+                "samples": str(REPO_ROOT / "tests" / "data" / "config" / "samples.tsv"),
+                "fastq_folder": str(REPO_ROOT / "tests" / "data" / "fastqs"),
+                "output_folder": str(stage_dir / "out"),
+            },
+        )
+        result = subprocess.run(
+            ["snakemake", "-s", str(SNAKEFILE), "--configfile", str(cfg), "-n"],
+            cwd=stage_dir,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert result.returncode == 0, (
+            f"External stage dry-run failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert "SampleA.merged.dedup.bqsr.bam" in result.stdout
+
+        spooled_launcher = tmp_path / "slurm_script"
+        shutil.copy(REPO_ROOT / "scripts" / "run_snakemake.sh", spooled_launcher)
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        args_file = tmp_path / "snakemake_args.txt"
+        conda_file = tmp_path / "conda_called.txt"
+        (bin_dir / "snakemake").write_text(f'#!/bin/bash\nprintf "%s\\n" "$@" > "{args_file}"\n')
+        (bin_dir / "snakemake").chmod(0o755)
+        (bin_dir / "conda").write_text(f'#!/bin/bash\necho "$@" > "{conda_file}"\n')
+        (bin_dir / "conda").chmod(0o755)
+        launcher_res = subprocess.run(
+            ["bash", str(spooled_launcher), str(SNAKEFILE), str(cfg), "-n"],
+            cwd=stage_dir,
+            env={**os.environ, "PATH": f"{bin_dir}:/usr/bin:/bin"},
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert launcher_res.returncode == 0, launcher_res.stderr
+        assert not conda_file.exists()
+        logged_args = args_file.read_text().splitlines()
+        assert str(REPO_ROOT / "profiles" / "default") in logged_args
+
+        cli_only_res = subprocess.run(
+            [
+                "snakemake",
+                "-s",
+                str(SNAKEFILE),
+                "--list-rules",
+                "--config",
+                f'paths={{"samples": "{REPO_ROOT / "tests/data/config/samples.tsv"}"}}',
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert cli_only_res.returncode == 0, (
+            f"CLI-only --config failed:\nstdout: {cli_only_res.stdout}\nstderr: {cli_only_res.stderr}"
+        )
+        assert "bwa_map" in cli_only_res.stdout

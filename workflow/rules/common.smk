@@ -109,4 +109,4 @@ def get_java_opts(wildcards, resources):
     Derive GATK --java-options from allocated resources.
     Reserves 20% of mem_mb for JVM non-heap overhead.
     """
-    return _get_java_opts_impl(resources.mem_mb, resources.tmpdir)
+    return _get_java_opts_impl(getattr(resources, "mem_mb", 4000), resources.tmpdir)

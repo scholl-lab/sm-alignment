@@ -8,7 +8,9 @@
 from snakemake.utils import validate
 
 
-configfile: "config/config.yaml"
+if not workflow.overwrite_configfiles:
+
+    configfile: "config/config.yaml"
 
 
 validate(config, "schemas/config.schema.yaml")
