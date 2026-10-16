@@ -51,10 +51,7 @@ rule apply_bqsr:
         ),
     params:
         java_opts=lambda wc, resources: (
-            f"-Xms{int(resources.mem_mb*0.2)}m"
-            f" -Xmx{int(resources.mem_mb*0.8)}m"
-            f" -Djava.io.tmpdir={resources.tmpdir}"
-            f" -Dsamjdk.compression_level={COMPRESSION_LEVEL}"
+            f"{get_java_opts(wc, resources)} -Dsamjdk.compression_level={COMPRESSION_LEVEL}"
         ),
         extra=config.get("params", {}).get("gatk", {}).get("ApplyBQSR", ""),
     threads: 4
