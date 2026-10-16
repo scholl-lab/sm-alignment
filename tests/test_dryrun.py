@@ -170,6 +170,7 @@ class TestDryRun:
         )
         result = _run_snakemake("-p", config=cfg)
         assert result.returncode == 0, result.stderr
+        assert "-Xmx3400m" in result.stdout
         assert "ftl=0" in result.stdout
         assert "qtrim=f" in result.stdout
         assert "quantize=" not in result.stdout
