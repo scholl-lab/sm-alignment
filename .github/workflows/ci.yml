@@ -40,6 +40,8 @@ jobs:
 
       - uses: mamba-org/setup-micromamba@v2
         with:
+          environment-name: ci
+          cache-environment: true
           condarc: |
             channels:
               - conda-forge
