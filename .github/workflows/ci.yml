@@ -38,12 +38,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: mamba-org/setup-micromamba@v2
         with:
-          python-version: "3.11"
-
-      - name: Install test dependencies
-        run: pip install pytest pandas pyyaml snakemake
+          condarc: |
+            channels:
+              - conda-forge
+              - bioconda
+          create-args: >-
+            python=3.11
+            pytest
+            pandas
+            pyyaml
+            snakemake
+            bwa=0.7.18
+            samtools=1.21
+            fgbio=3.1.2
+            bbmap=39.06
 
       - name: Run unit tests
-        run: pytest
+        shell: bash -el {0}
+        run: |
+          which fgbio samtools bbduk.sh bwa snakemake
+          pytest

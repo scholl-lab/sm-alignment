@@ -11,22 +11,8 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
-try:
-    from snakemake.utils import validate as snakemake_validate
-
-    HAS_SNAKEMAKE = True
-except ImportError:
-    HAS_SNAKEMAKE = False
-
-# snakemake.validate() may raise WorkflowError or jsonschema.ValidationError
-# depending on the version; we catch the broadest applicable base.
-try:
-    from snakemake.exceptions import WorkflowError as _SchemaError
-except Exception:
-    _SchemaError = Exception  # type: ignore[assignment,misc]
-
-pytestmark = pytest.mark.skipif(not HAS_SNAKEMAKE, reason="snakemake not installed")
+from snakemake.exceptions import WorkflowError as _SchemaError
+from snakemake.utils import validate as snakemake_validate
 
 SCHEMA_DIR = Path(__file__).resolve().parent.parent / "workflow" / "schemas"
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -87,8 +73,7 @@ class TestConfigSchema:
     def test_actual_repo_config(self):
         """Validate the actual config/config.yaml from the repo."""
         repo_config = Path(__file__).resolve().parent.parent / "config" / "config.yaml"
-        if not repo_config.exists():
-            pytest.skip("No repo config/config.yaml")
+        assert repo_config.exists()
         cfg = _load_yaml(repo_config)
         snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
 

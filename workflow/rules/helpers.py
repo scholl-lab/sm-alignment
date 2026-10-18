@@ -217,8 +217,8 @@ def load_umi_presets(path: str | os.PathLike[str] | None = None) -> dict[str, di
 
 
 def _validate_read_structures_syntax(read_structures: str) -> str:
-    """Validate paired-end fgbio read-structure syntax and return stripped string."""
-    rs = str(read_structures).strip()
+    """Validate paired-end fgbio read-structure syntax and return normalized string."""
+    rs = " ".join(str(read_structures).split())
     if not FGBIO_READ_STRUCTURES_RE.match(rs):
         raise ValueError(
             f"Invalid fgbio read_structures '{read_structures}': expected two space-separated "
@@ -248,6 +248,15 @@ def validate_umi_config(
         )
     if rs:
         _validate_read_structures_syntax(rs)
+
+    umi_tag = str(umi_cfg.get("umi_tag") or "RX").strip()
+    dedup_cfg = umi_cfg.get("dedup") or {}
+    raw_bt = dedup_cfg.get("barcode_tag")
+    if raw_bt is not None and str(raw_bt).strip() and str(raw_bt).strip() != umi_tag:
+        raise ValueError(
+            f"umi.dedup.barcode_tag '{str(raw_bt).strip()}' must match umi.umi_tag '{umi_tag}' "
+            "(or be null/empty for position-only deduplication)."
+        )
 
     if enabled:
         has_kit_preset = bool(preset and preset != "custom")

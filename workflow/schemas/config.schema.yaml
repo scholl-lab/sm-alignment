@@ -292,9 +292,8 @@ properties:
         properties:
           barcode_tag:
             type: ["string", "null"]
-            default: "RX"
             pattern: "^[A-Za-z][A-Za-z0-9]$|^$"
-            description: SAM tag passed to MarkDuplicates --BARCODE_TAG (null = position-only)
+            description: SAM tag passed to MarkDuplicates --BARCODE_TAG (defaults to umi_tag; null = position-only)
           extra:
             type: string
             default: ""

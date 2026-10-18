@@ -360,6 +360,10 @@ class TestUmiHelpers:
                 "read_structures": "5M2S+T 5M2S+T",
             }
             assert resolve_umi_read_structures(cfg) == "5M2S+T 5M2S+T"
+        assert (
+            resolve_umi_read_structures({"enabled": True, "read_structures": "3M2S+T\n3M2S+T"})
+            == "3M2S+T 3M2S+T"
+        )
 
     def test_disabled_returns_empty(self):
         assert resolve_umi_read_structures({"enabled": False}) == ""
@@ -389,6 +393,19 @@ class TestUmiHelpers:
         with pytest.raises(ValueError, match=r"Unknown umi\.preset"):
             validate_umi_config({"enabled": True, "preset": "unknown_kit"})
 
+    def test_validate_umi_config_rejects_barcode_tag_mismatch(self):
+        with pytest.raises(
+            ValueError, match=r"umi\.dedup\.barcode_tag 'RX' must match umi\.umi_tag 'OX'"
+        ):
+            validate_umi_config(
+                {
+                    "enabled": True,
+                    "preset": "agilent_xths2",
+                    "umi_tag": "OX",
+                    "dedup": {"barcode_tag": "RX"},
+                }
+            )
+
     def test_write_umi_provenance_logs_and_writes_yaml(self, tmp_path, caplog):
         import logging
 
@@ -414,6 +431,9 @@ class TestUmiHelpers:
         assert format_bwa_extra("-K 100000000 -Y -C", umi_enabled=True) == "-K 100000000 -Y -C"
 
     def test_format_mark_duplicates_extra(self):
+        import yaml
+        from snakemake.utils import validate as snakemake_validate
+
         base = "--VALIDATION_STRINGENCY LENIENT --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500"
         assert format_mark_duplicates_extra(base, {"enabled": False}) == base
         assert (
@@ -435,6 +455,13 @@ class TestUmiHelpers:
             )
             == f"{base} --TAGGING_POLICY All"
         )
+
+        repo_root = Path(__file__).resolve().parent.parent
+        cfg = yaml.safe_load((repo_root / "tests" / "data" / "config" / "config.yaml").read_text())
+        cfg["umi"] = {"enabled": True, "umi_tag": "OX", "preset": "agilent_xths2"}
+        snakemake_validate(cfg, str(repo_root / "workflow" / "schemas" / "config.schema.yaml"))
+        validate_umi_config(cfg["umi"])
+        assert format_mark_duplicates_extra("", cfg["umi"]) == "--BARCODE_TAG OX --DUPLEX_UMI true"
 
     def test_resolve_fastq_path_umi_mode(self, samples_df):
         result = resolve_fastq_path(

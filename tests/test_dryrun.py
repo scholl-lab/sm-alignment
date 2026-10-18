@@ -15,13 +15,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-pytestmark = [
-    pytest.mark.dryrun,
-    pytest.mark.skipif(
-        shutil.which("snakemake") is None,
-        reason="snakemake not installed or not on PATH",
-    ),
-]
+pytestmark = [pytest.mark.dryrun]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TEST_CONFIG = REPO_ROOT / "tests" / "data" / "config" / "config.yaml"
@@ -386,7 +380,7 @@ class TestDryRun:
                 assert " -C" not in block
 
     def test_umi_enabled_dryrun_commands(self, tmp_path):
-        """Dry-run with umi.enabled=true schedules umi_extract -> trim_adapters -> bwa_map (-C) -> MarkDuplicates (BARCODE_TAG)."""
+        """Dry-run wiring test: umi.enabled=true schedules umi_extract -> trim_adapters -> bwa_map (-C) -> MarkDuplicates (BARCODE_TAG)."""
         cfg = _write_config(
             tmp_path,
             "cfg_umi_on.yaml",
@@ -403,10 +397,22 @@ class TestDryRun:
         assert "-K 100000000 -Y -C" in result.stdout
         assert "--BARCODE_TAG RX --DUPLEX_UMI true" in result.stdout
 
+        cfg_custom = _write_config(
+            tmp_path,
+            "cfg_umi_custom.yaml",
+            trimming={"enabled": True},
+            umi={"enabled": True, "umi_tag": "OX", "read_structures": "3M2S+T\n3M2S+T"},
+        )
+        res_custom = _run_snakemake("-p", config=cfg_custom)
+        assert res_custom.returncode == 0, res_custom.stderr
+        assert "--read-structures 3M2S+T 3M2S+T" in res_custom.stdout
+        assert "--umi-tag OX" in res_custom.stdout
+        assert "-T OX" in res_custom.stdout
+        assert "--BARCODE_TAG OX --DUPLEX_UMI true" in res_custom.stdout
+
     def test_umi_enabled_fixture_end_to_end(self, tmp_path):
         """Execute umi_extract -> trim_adapters -> bwa_map -> merge -> dedup on a paired FASTQ fixture with MBC + dark bases + read-through adapter."""
         import gzip
-        import sys
 
         def revcomp(seq: str) -> str:
             return seq.translate(str.maketrans("ACGTB", "TGCAV"))[::-1]
@@ -450,7 +456,6 @@ class TestDryRun:
             "SampleA_S1_L001\tL001\tSampleA\tTestProject\n"
         )
 
-        # Locate real binaries or install lightweight Python shims in bin_dir
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
         pkgs_root = Path.home() / "miniforge3" / "pkgs"
@@ -465,89 +470,19 @@ class TestDryRun:
                     return str(matches[-1])
             return None
 
-        real_fgbio = _find_tool("fgbio", "fgbio-*")
-        real_samtools = _find_tool("samtools", "samtools-1.2*")
-        real_bbduk = _find_tool("bbduk.sh", "bbmap-*")
-        real_bwa = _find_tool("bwa", "bwa-*")
-
-        if real_fgbio and real_samtools and real_bbduk and real_bwa:
-            for name, target in [
-                ("fgbio", real_fgbio),
-                ("samtools", real_samtools),
-                ("bbduk.sh", real_bbduk),
-                ("bwa", real_bwa),
-            ]:
-                (bin_dir / name).symlink_to(target)
-            subprocess.run([real_bwa, "index", str(ref_fa)], check=True, capture_output=True)
-        else:
-            # Python fallback shims for minimal CI environments without conda packages
-            shim_py = tmp_path / "umi_shims.py"
-            shim_py.write_text(
-                "import gzip, json, sys\n"
-                "from pathlib import Path\n"
-                "mode = sys.argv[1]; args = sys.argv[2:]\n"
-                "if mode == 'fgbio':\n"
-                "    i = args.index('--input'); r1, r2 = args[i+1], args[i+2]\n"
-                "    u = args[args.index('--umi-tag')+1]\n"
-                "    with gzip.open(r1, 'rt') as f1, gzip.open(r2, 'rt') as f2:\n"
-                "        h1, s1, p1, q1 = [f1.readline().strip() for _ in range(4)]\n"
-                "        h2, s2, p2, q2 = [f2.readline().strip() for _ in range(4)]\n"
-                "    qname = h1.split()[0].lstrip('@')\n"
-                "    umi = f'{s1[:3]}-{s2[:3]}'\n"
-                "    json.dump({'qname': qname, 'tag': f'{u}:Z:{umi}', 's1': s1[5:], 'q1': q1[5:], 's2': s2[5:], 'q2': q2[5:]}, sys.stdout)\n"
-                "elif mode == 'bbduk':\n"
-                "    kv = dict(a.split('=', 1) for a in args if '=' in a)\n"
-                "    with gzip.open(kv['in'], 'rt') as f1, gzip.open(kv['in2'], 'rt') as f2:\n"
-                "        h1, s1, p1, q1 = [f1.readline().strip() for _ in range(4)]\n"
-                "        h2, s2, p2, q2 = [f2.readline().strip() for _ in range(4)]\n"
-                "    rc2 = s2.translate(str.maketrans('ACGTB', 'TGCAV'))[::-1]\n"
-                "    n = next((L for L in range(len(s1), 19, -1) if s1[:L] in rc2), len(s1))\n"
-                "    with gzip.open(kv['out'], 'wt') as o1, gzip.open(kv['out2'], 'wt') as o2:\n"
-                "        o1.write(f'{h1}\\n{s1[:n]}\\n+\\n{q1[:n]}\\n')\n"
-                "        o2.write(f'{h2}\\n{s2[:n]}\\n+\\n{q2[:n]}\\n')\n"
-                "elif mode == 'bwa':\n"
-                "    rg = args[args.index('-R')+1].replace('\\\\t', '\\t')\n"
-                "    r1, r2 = args[-2], args[-1]\n"
-                "    with gzip.open(r1, 'rt') as f1, gzip.open(r2, 'rt') as f2:\n"
-                "        h1, s1, _, q1 = [f1.readline().strip() for _ in range(4)]\n"
-                "        h2, s2, _, q2 = [f2.readline().strip() for _ in range(4)]\n"
-                "    parts = h1.lstrip('@').split('\\t')\n"
-                "    qn = parts[0]; comment = ('\\t' + parts[1]) if ('-C' in args and len(parts) > 1) else ''\n"
-                "    sys.stdout.write(f'@HD\\tVN:1.6\\tSO:coordinate\\n{rg}\\n')\n"
-                "    sys.stdout.write(f'{qn}\\t97\\tchr1\\t21\\t60\\t{len(s1)}M\\t=\\t21\\t{len(s1)}\\t{s1}\\t{q1}\\tRG:Z:rg1{comment}\\n')\n"
-                "    sys.stdout.write(f'{qn}\\t145\\tchr1\\t21\\t60\\t{len(s2)}M\\t=\\t21\\t-{len(s2)}\\t{s2}\\t{q2}\\tRG:Z:rg1{comment}\\n')\n"
-                "elif mode == 'samtools':\n"
-                "    sub = args[0]\n"
-                "    if sub == 'fastq':\n"
-                "        d = json.load(sys.stdin)\n"
-                "        o1, o2 = args[args.index('-1')+1], args[args.index('-2')+1]\n"
-                "        with gzip.open(o1, 'wt') as f1, gzip.open(o2, 'wt') as f2:\n"
-                "            f1.write(f\"@{d['qname']}\\t{d['tag']}\\n{d['s1']}\\n+\\n{d['q1']}\\n\")\n"
-                "            f2.write(f\"@{d['qname']}\\t{d['tag']}\\n{d['s2']}\\n+\\n{d['q2']}\\n\")\n"
-                "    elif sub == 'sort':\n"
-                "        out = args[args.index('-o')+1]\n"
-                "        Path(out).write_text(sys.stdin.read())\n"
-                "    elif sub == 'merge':\n"
-                "        bfile = args[args.index('-b')+1]; out = args[-1]\n"
-                "        first = Path(Path(bfile).read_text().splitlines()[0].strip())\n"
-                "        Path(out).write_text(first.read_text())\n"
-                "    elif sub == 'view':\n"
-                "        bam = args[-1]\n"
-                "        for line in Path(bam).read_text().splitlines():\n"
-                "            if ('-H' in args) == line.startswith('@'):\n"
-                "                print(line)\n"
-            )
-            for tool, mode in [
-                ("fgbio", "fgbio"),
-                ("bbduk.sh", "bbduk"),
-                ("bwa", "bwa"),
-                ("samtools", "samtools"),
-            ]:
-                script = bin_dir / tool
-                script.write_text(
-                    f'#!/bin/bash\nexec "{sys.executable}" "{shim_py}" {mode} "$@"\n'
-                )
-                script.chmod(0o755)
+        tools = {
+            "fgbio": _find_tool("fgbio", "fgbio-*"),
+            "samtools": _find_tool("samtools", "samtools-1.2*"),
+            "bbduk.sh": _find_tool("bbduk.sh", "bbmap-*"),
+            "bwa": _find_tool("bwa", "bwa-*"),
+        }
+        missing = [name for name, path in tools.items() if not path]
+        assert not missing, f"Missing required bioinformatics tools: {missing}"
+        for name, target in tools.items():
+            assert target is not None
+            (bin_dir / name).symlink_to(target)
+        assert tools["bwa"] is not None
+        subprocess.run([tools["bwa"], "index", str(ref_fa)], check=True, capture_output=True)
 
         markdup_args_file = tmp_path / "markdup_args.txt"
         gatk_shim = bin_dir / "gatk"
