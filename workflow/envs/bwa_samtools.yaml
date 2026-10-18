@@ -5,3 +5,4 @@ dependencies:
   - bwa=0.7.18
   - samtools=1.21
   - samblaster=0.1.26
+  - fgbio=3.1.2

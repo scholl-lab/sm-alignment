@@ -1,13 +1,19 @@
 import os
 from rules.helpers import (
+    format_bwa_extra as _format_bwa_extra_impl,
+    format_mark_duplicates_extra as _format_mark_duplicates_extra_impl,
     format_read_group as _format_read_group_impl,
     get_java_opts as _get_java_opts_impl,
+    get_read_group_fields as _get_read_group_fields_impl,
     get_sample_kit as _get_sample_kit_impl,
     get_samples as _get_samples_impl,
     get_all_basenames as _get_all_basenames_impl,
     get_basenames_for_sample as _get_basenames_impl,
     load_samples as _load_samples_impl,
     resolve_fastq_path as _resolve_fastq_path_impl,
+    resolve_umi_read_structures as _resolve_umi_read_structures_impl,
+    validate_umi_config as _validate_umi_config_impl,
+    write_umi_provenance as _write_umi_provenance_impl,
 )
 
 
@@ -33,6 +39,19 @@ R1_SUFFIX = config.get("fastq", {}).get("r1_suffix", "_R1_001.fastq.gz")
 R2_SUFFIX = config.get("fastq", {}).get("r2_suffix", "_R2_001.fastq.gz")
 TRIMMED_R1_SUFFIX = config.get("fastq", {}).get("trimmed_r1_suffix", ".bbduk_R1_001.fastq.gz")
 TRIMMED_R2_SUFFIX = config.get("fastq", {}).get("trimmed_r2_suffix", ".bbduk_R2_001.fastq.gz")
+
+# --- UMI / molecular barcode extraction ---
+UMI_CFG = config.get("umi", {}) or {}
+_validate_umi_config_impl(UMI_CFG)
+UMI_ENABLED = bool(UMI_CFG.get("enabled", False))
+UMI_READ_STRUCTURES = _resolve_umi_read_structures_impl(UMI_CFG)
+UMI_TAG = str(UMI_CFG.get("umi_tag") or "RX")
+UMI_FGBIO_CFG = UMI_CFG.get("fgbio", {}) or {}
+UMI_FGBIO_EXTRA = str(UMI_FGBIO_CFG.get("fastq_to_bam_extra") or "").strip()
+UMI_FGBIO_MEM_MB = int(UMI_FGBIO_CFG.get("mem_mb", 8000))
+UMI_DIR = os.path.join(OUTPUT_DIR, "umi_extracted")
+UMI_R1_SUFFIX = ".umi_R1_001.fastq.gz"
+UMI_R2_SUFFIX = ".umi_R2_001.fastq.gz"
 
 # --- Trimming ---
 TRIMMING_ENABLED = config.get("trimming", {}).get("enabled", False)
@@ -83,21 +102,38 @@ def get_basenames_for_sample(sample):
 
 
 def _resolve_fastq_path(wildcards, suffix):
-    """Build FASTQ path respecting trimming mode and optional subfolder."""
+    """Build FASTQ path respecting trimming/UMI mode and optional subfolder."""
     return _resolve_fastq_path_impl(
-        wildcards.basename, suffix, samples_df, TRIMMING_ENABLED, TRIMMED_DIR, FASTQ_DIR
+        wildcards.basename,
+        suffix,
+        samples_df,
+        TRIMMING_ENABLED,
+        TRIMMED_DIR,
+        FASTQ_DIR,
+        UMI_ENABLED,
+        UMI_DIR,
     )
 
 
 def get_fastq_r1(wildcards):
-    """Return R1 FASTQ path - trimmed or raw depending on config."""
-    suffix = TRIMMED_R1_SUFFIX if TRIMMING_ENABLED else R1_SUFFIX
+    """Return R1 FASTQ path - trimmed, UMI-extracted, or raw depending on config."""
+    if TRIMMING_ENABLED:
+        suffix = TRIMMED_R1_SUFFIX
+    elif UMI_ENABLED:
+        suffix = UMI_R1_SUFFIX
+    else:
+        suffix = R1_SUFFIX
     return _resolve_fastq_path(wildcards, suffix)
 
 
 def get_fastq_r2(wildcards):
-    """Return R2 FASTQ path - trimmed or raw depending on config."""
-    suffix = TRIMMED_R2_SUFFIX if TRIMMING_ENABLED else R2_SUFFIX
+    """Return R2 FASTQ path - trimmed, UMI-extracted, or raw depending on config."""
+    if TRIMMING_ENABLED:
+        suffix = TRIMMED_R2_SUFFIX
+    elif UMI_ENABLED:
+        suffix = UMI_R2_SUFFIX
+    else:
+        suffix = R2_SUFFIX
     return _resolve_fastq_path(wildcards, suffix)
 
 

@@ -29,6 +29,7 @@ set-threads:
   deduplicate_bam_files: 4
   base_recalibration: 4
   apply_bqsr: 4
+  umi_extract: 4
   trim_adapters: 4
   convert_bam_to_fastq: 8
   subset_bam: 1
@@ -70,6 +71,10 @@ set-resources:
   apply_bqsr:
     mem_mb: 17600
     runtime: "480m"
+    cpus_per_task: 4
+  umi_extract:
+    mem_mb: 8000
+    runtime: "240m"
     cpus_per_task: 4
   trim_adapters:
     mem_mb: 4000

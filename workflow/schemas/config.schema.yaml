@@ -258,6 +258,83 @@ properties:
                 - bait_intervals
                 - target_intervals
 
+  umi:
+    type: object
+    default: {}
+    description: UMI / molecular barcode extraction and UMI-aware deduplication
+    properties:
+      enabled:
+        type: boolean
+        default: false
+        description: Master switch for UMI extraction and UMI-aware deduplication
+      preset:
+        type: ["string", "null"]
+        default: null
+        enum: [null, "", "agilent_xths2", "custom"]
+        description: Verified library kit preset from config/umi_presets.yaml (e.g. agilent_xths2)
+      read_structures:
+        type: ["string", "null"]
+        default: null
+        pattern: "^(?=.*M)(?=[^\\s]*T)(?:[1-9][0-9]*[TBMCS])*(?:[1-9][0-9]*|\\+)[TBMCS]\\s+(?=[^\\s]*T)(?:[1-9][0-9]*[TBMCS])*(?:[1-9][0-9]*|\\+)[TBMCS]$|^$"
+        description: Paired-end fgbio read structures (e.g. "3M2S+T 3M2S+T")
+      umi_tag:
+        type: string
+        default: "RX"
+        pattern: "^[A-Za-z][A-Za-z0-9]$"
+        description: SAM tag used to store the extracted UMI
+      duplex:
+        type: boolean
+        default: true
+        description: Enable GATK MarkDuplicates --DUPLEX_UMI mode
+      dedup:
+        type: object
+        default: {}
+        properties:
+          barcode_tag:
+            type: ["string", "null"]
+            pattern: "^[A-Za-z][A-Za-z0-9]$|^$"
+            description: SAM tag passed to MarkDuplicates --BARCODE_TAG (defaults to umi_tag; null = position-only)
+          extra:
+            type: string
+            default: ""
+            description: Extra CLI arguments passed to MarkDuplicates when UMI is enabled
+      fgbio:
+        type: object
+        default: {}
+        properties:
+          fastq_to_bam_extra:
+            type: string
+            default: ""
+            description: Extra CLI arguments passed to fgbio FastqToBam
+          mem_mb:
+            type: integer
+            default: 8000
+            minimum: 1
+            description: Default memory (MB) for umi_extract rule (overridable by profile)
+    if:
+      properties:
+        enabled:
+          const: true
+      required:
+        - enabled
+    then:
+      oneOf:
+        - properties:
+            preset:
+              enum: ["agilent_xths2"]
+            read_structures:
+              enum: [null, ""]
+          required:
+            - preset
+        - properties:
+            preset:
+              enum: [null, "", "custom"]
+            read_structures:
+              type: string
+              minLength: 1
+          required:
+            - read_structures
+
   subset:
     type: object
     properties:

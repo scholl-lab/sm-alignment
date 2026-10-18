@@ -11,22 +11,8 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
-try:
-    from snakemake.utils import validate as snakemake_validate
-
-    HAS_SNAKEMAKE = True
-except ImportError:
-    HAS_SNAKEMAKE = False
-
-# snakemake.validate() may raise WorkflowError or jsonschema.ValidationError
-# depending on the version; we catch the broadest applicable base.
-try:
-    from snakemake.exceptions import WorkflowError as _SchemaError
-except Exception:
-    _SchemaError = Exception  # type: ignore[assignment,misc]
-
-pytestmark = pytest.mark.skipif(not HAS_SNAKEMAKE, reason="snakemake not installed")
+from snakemake.exceptions import WorkflowError as _SchemaError
+from snakemake.utils import validate as snakemake_validate
 
 SCHEMA_DIR = Path(__file__).resolve().parent.parent / "workflow" / "schemas"
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -87,8 +73,7 @@ class TestConfigSchema:
     def test_actual_repo_config(self):
         """Validate the actual config/config.yaml from the repo."""
         repo_config = Path(__file__).resolve().parent.parent / "config" / "config.yaml"
-        if not repo_config.exists():
-            pytest.skip("No repo config/config.yaml")
+        assert repo_config.exists()
         cfg = _load_yaml(repo_config)
         snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
 
@@ -122,6 +107,82 @@ class TestConfigSchema:
         """String where boolean expected should fail."""
         cfg = copy.deepcopy(valid_config)
         cfg["qc"] = {"enabled": "yes"}
+        with pytest.raises(_SchemaError):
+            snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
+    def test_umi_disabled_defaults_valid(self, valid_config):
+        """UMI disabled with null preset and read_structures should pass."""
+        cfg = copy.deepcopy(valid_config)
+        cfg["umi"] = {
+            "enabled": False,
+            "preset": None,
+            "read_structures": None,
+            "umi_tag": "RX",
+            "duplex": True,
+            "dedup": {"barcode_tag": "RX", "extra": ""},
+            "fgbio": {"fastq_to_bam_extra": "", "mem_mb": 8000},
+        }
+        snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
+    def test_umi_preset_agilent_xths2_valid(self, valid_config):
+        """UMI enabled with preset=agilent_xths2 and null read_structures should pass."""
+        cfg = copy.deepcopy(valid_config)
+        cfg["umi"] = {"enabled": True, "preset": "agilent_xths2", "read_structures": None}
+        snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
+    def test_umi_custom_read_structures_valid(self, valid_config):
+        """UMI enabled with valid custom read_structures (preset=null or custom) should pass."""
+        for preset in (None, "", "custom"):
+            cfg = copy.deepcopy(valid_config)
+            cfg["umi"] = {
+                "enabled": True,
+                "preset": preset,
+                "read_structures": "3M2S+T 3M2S+T",
+            }
+            snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
+    @pytest.mark.parametrize(
+        "bad_structure",
+        [
+            "invalid",
+            "3X2S+T 3X2S+T",
+            "+M+T +M+T",
+            "3M2S+T",
+            "+T +T",
+            "3M2S 3M2S",
+            "0M+T 0M+T",
+        ],
+    )
+    def test_umi_invalid_read_structures_rejected(self, valid_config, bad_structure):
+        """Invalid fgbio read_structures syntax must be rejected by schema."""
+        cfg = copy.deepcopy(valid_config)
+        cfg["umi"] = {"enabled": True, "read_structures": bad_structure}
+        with pytest.raises(_SchemaError):
+            snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
+    def test_umi_preset_and_read_structures_conflict_rejected(self, valid_config):
+        """Setting both a kit preset and read_structures when enabled must be rejected."""
+        cfg = copy.deepcopy(valid_config)
+        cfg["umi"] = {
+            "enabled": True,
+            "preset": "agilent_xths2",
+            "read_structures": "5M+T 5M+T",
+        }
+        with pytest.raises(_SchemaError):
+            snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
+    @pytest.mark.parametrize("preset", [None, "", "custom"])
+    def test_umi_enabled_missing_both_rejected(self, valid_config, preset):
+        """Enabling UMI without preset or read_structures must be rejected."""
+        cfg = copy.deepcopy(valid_config)
+        cfg["umi"] = {"enabled": True, "preset": preset, "read_structures": None}
+        with pytest.raises(_SchemaError):
+            snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
+    def test_umi_unknown_preset_rejected(self, valid_config):
+        """Unknown UMI preset name must be rejected by schema enum."""
+        cfg = copy.deepcopy(valid_config)
+        cfg["umi"] = {"enabled": True, "preset": "nonexistent_kit"}
         with pytest.raises(_SchemaError):
             snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
 

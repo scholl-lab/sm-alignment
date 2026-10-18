@@ -92,6 +92,20 @@ qc:
     enabled: false
     kits: {}
 
+# --- UMI / molecular barcode extraction & UMI-aware deduplication ---
+umi:
+  enabled: false                 # default off: behaviour identical to today
+  preset: null                   # optional: agilent_xths2 | custom (see config/umi_presets.yaml)
+  read_structures: null          # fgbio read structures; overrides preset (e.g. "3M2S+T 3M2S+T")
+  umi_tag: RX                    # SAM tag for the UMI
+  duplex: true                   # MarkDuplicates --DUPLEX_UMI
+  dedup:
+    barcode_tag: RX              # MarkDuplicates --BARCODE_TAG (null = position-only)
+    extra: ""                    # passthrough MarkDuplicates args
+  fgbio:
+    fastq_to_bam_extra: ""       # passthrough args
+    mem_mb: 8000                 # resources overridable by profile
+
 # --- Subset BAM (optional) ---
 subset:
   bed_file: ""

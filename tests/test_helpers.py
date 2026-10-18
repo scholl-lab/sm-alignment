@@ -12,6 +12,8 @@ import pytest
 # Add workflow/rules to path so we can import helpers directly
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "workflow" / "rules"))
 from helpers import (
+    format_bwa_extra,
+    format_mark_duplicates_extra,
     format_read_group,
     get_all_basenames,
     get_basenames_for_sample,
@@ -19,7 +21,11 @@ from helpers import (
     get_sample_kit,
     get_samples,
     load_samples,
+    load_umi_presets,
     resolve_fastq_path,
+    resolve_umi_read_structures,
+    validate_umi_config,
+    write_umi_provenance,
 )
 
 # ============================================================================
@@ -326,3 +332,146 @@ class TestLoadSamples:
         )
         with pytest.raises(ValueError, match="conflicting kits"):
             load_samples(bad_tsv)
+
+
+# ============================================================================
+# TestUmiHelpers
+# ============================================================================
+
+
+class TestUmiHelpers:
+    """Tests for UMI preset resolution, validation, provenance, and CLI flag helpers."""
+
+    def test_load_umi_presets_contains_agilent_xths2(self):
+        presets = load_umi_presets()
+        assert "agilent_xths2" in presets
+        assert presets["agilent_xths2"]["read_structures"] == "3M2S+T 3M2S+T"
+        assert "G9985-90010" in presets["agilent_xths2"]["source"]
+
+    def test_preset_resolves_to_right_structure(self):
+        cfg = {"enabled": True, "preset": "agilent_xths2", "read_structures": None}
+        assert resolve_umi_read_structures(cfg) == "3M2S+T 3M2S+T"
+
+    def test_custom_structure_overrides_preset(self):
+        for preset in (None, "custom", "agilent_xths2"):
+            cfg = {
+                "enabled": True,
+                "preset": preset,
+                "read_structures": "5M2S+T 5M2S+T",
+            }
+            assert resolve_umi_read_structures(cfg) == "5M2S+T 5M2S+T"
+        assert (
+            resolve_umi_read_structures({"enabled": True, "read_structures": "3M2S+T\n3M2S+T"})
+            == "3M2S+T 3M2S+T"
+        )
+
+    def test_disabled_returns_empty(self):
+        assert resolve_umi_read_structures({"enabled": False}) == ""
+        assert resolve_umi_read_structures(None) == ""
+
+    def test_validate_umi_config_rejects_conflict(self):
+        with pytest.raises(ValueError, match="umi config conflict"):
+            validate_umi_config(
+                {
+                    "enabled": True,
+                    "preset": "agilent_xths2",
+                    "read_structures": "5M+T 5M+T",
+                }
+            )
+
+    def test_validate_umi_config_rejects_missing_both(self):
+        with pytest.raises(ValueError, match="must specify either"):
+            validate_umi_config({"enabled": True, "preset": None, "read_structures": None})
+        with pytest.raises(ValueError, match="must specify either"):
+            validate_umi_config({"enabled": True, "preset": "custom", "read_structures": ""})
+
+    def test_validate_umi_config_rejects_invalid_structure(self):
+        with pytest.raises(ValueError, match="Invalid fgbio read_structures"):
+            validate_umi_config({"enabled": True, "read_structures": "3X+T 3X+T"})
+
+    def test_validate_umi_config_rejects_unknown_preset(self):
+        with pytest.raises(ValueError, match=r"Unknown umi\.preset"):
+            validate_umi_config({"enabled": True, "preset": "unknown_kit"})
+
+    def test_validate_umi_config_rejects_barcode_tag_mismatch(self):
+        with pytest.raises(
+            ValueError, match=r"umi\.dedup\.barcode_tag 'RX' must match umi\.umi_tag 'OX'"
+        ):
+            validate_umi_config(
+                {
+                    "enabled": True,
+                    "preset": "agilent_xths2",
+                    "umi_tag": "OX",
+                    "dedup": {"barcode_tag": "RX"},
+                }
+            )
+
+    def test_write_umi_provenance_logs_and_writes_yaml(self, tmp_path, caplog):
+        import logging
+
+        import yaml
+
+        cfg = {"enabled": True, "preset": "agilent_xths2", "umi_tag": "RX", "duplex": True}
+        with caplog.at_level(logging.INFO):
+            out = write_umi_provenance(tmp_path / "logs", cfg)
+        assert out is not None and out.exists()
+        assert "read_structures='3M2S+T 3M2S+T'" in caplog.text
+        data = yaml.safe_load(out.read_text())
+        assert data["umi"]["preset"] == "agilent_xths2"
+        assert data["umi"]["read_structures"] == "3M2S+T 3M2S+T"
+        assert data["umi"]["umi_tag"] == "RX"
+        assert data["umi"]["duplex"] is True
+        assert "G9985-90010" in data["umi"]["source"]
+
+        assert write_umi_provenance(tmp_path / "logs", {"enabled": False}) is None
+
+    def test_format_bwa_extra(self):
+        assert format_bwa_extra("-K 100000000 -Y", umi_enabled=False) == "-K 100000000 -Y"
+        assert format_bwa_extra("-K 100000000 -Y", umi_enabled=True) == "-K 100000000 -Y -C"
+        assert format_bwa_extra("-K 100000000 -Y -C", umi_enabled=True) == "-K 100000000 -Y -C"
+
+    def test_format_mark_duplicates_extra(self):
+        import yaml
+        from snakemake.utils import validate as snakemake_validate
+
+        base = "--VALIDATION_STRINGENCY LENIENT --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500"
+        assert format_mark_duplicates_extra(base, {"enabled": False}) == base
+        assert (
+            format_mark_duplicates_extra(base, {"enabled": True, "duplex": True, "umi_tag": "RX"})
+            == f"{base} --BARCODE_TAG RX --DUPLEX_UMI true"
+        )
+        assert (
+            format_mark_duplicates_extra(base, {"enabled": True, "duplex": False, "umi_tag": "RX"})
+            == f"{base} --BARCODE_TAG RX"
+        )
+        assert (
+            format_mark_duplicates_extra(
+                base,
+                {
+                    "enabled": True,
+                    "duplex": True,
+                    "dedup": {"barcode_tag": None, "extra": "--TAGGING_POLICY All"},
+                },
+            )
+            == f"{base} --TAGGING_POLICY All"
+        )
+
+        repo_root = Path(__file__).resolve().parent.parent
+        cfg = yaml.safe_load((repo_root / "tests" / "data" / "config" / "config.yaml").read_text())
+        cfg["umi"] = {"enabled": True, "umi_tag": "OX", "preset": "agilent_xths2"}
+        snakemake_validate(cfg, str(repo_root / "workflow" / "schemas" / "config.schema.yaml"))
+        validate_umi_config(cfg["umi"])
+        assert format_mark_duplicates_extra("", cfg["umi"]) == "--BARCODE_TAG OX --DUPLEX_UMI true"
+
+    def test_resolve_fastq_path_umi_mode(self, samples_df):
+        result = resolve_fastq_path(
+            "SampleA_S1_L001",
+            ".umi_R1_001.fastq.gz",
+            samples_df,
+            trimming_enabled=False,
+            trimmed_dir="/out/trimmed",
+            fastq_dir="/data/fastqs",
+            umi_enabled=True,
+            umi_dir="/out/umi",
+        )
+        assert result == os.path.join("/out/umi", "SampleA_S1_L001.umi_R1_001.fastq.gz")
