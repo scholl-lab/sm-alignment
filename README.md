@@ -7,6 +7,7 @@ Designed for SLURM HPC clusters with automatic cluster detection.
 ```mermaid
 flowchart LR
     FASTQ["Paired-end\nFASTQ files"]
+    UMI["fgbio + samtools\nUMI extract"]
     TRIM["BBDuk\ntrim"]
     ALIGN["BWA MEM\nalign"]
     MERGE["samtools merge\nper sample"]
@@ -18,6 +19,8 @@ flowchart LR
     QC["samtools stats\nPicard metrics\nQualimap"]
     MULTIQC["MultiQC\nreport"]
 
+    FASTQ -.->|umi\nenabled| UMI
+    UMI -.-> TRIM
     FASTQ --> TRIM
     TRIM -.->|trimming\nenabled| ALIGN
     FASTQ -->|per lane| ALIGN
@@ -34,6 +37,7 @@ flowchart LR
     QC -.-> MULTIQC
     DEDUP -.->|dedup\nmetrics| MULTIQC
 
+    style UMI stroke-dasharray: 5 5
     style TRIM stroke-dasharray: 5 5
     style FQC_RAW stroke-dasharray: 5 5
     style FQC_TRIM stroke-dasharray: 5 5
@@ -239,6 +243,7 @@ tail -f slurm_logs/slurm-*.log
 | `ref` | `genome`, `build`, `known_sites` (list of VCFs for BQSR) |
 | `paths` | `fastq_folder`, `output_folder`, `samples` (path to TSV) |
 | `trimming` | Set `enabled: true` to run BBDuk adapter trimming before alignment |
+| `umi` | UMI / molecular barcode extraction (`fgbio FastqToBam`) and UMI-aware duplicate marking (`--BARCODE_TAG`, `--DUPLEX_UMI`) |
 | `qc` | Quality control: `enabled`, per-tool toggles (`fastqc`, `samtools_stats`, `samtools_flagstat`, `picard_collect_metrics`, `qualimap`) |
 | `params` | Extra CLI flags passed through to bwa, samtools, GATK tools |
 | `subset` | Optional BAM subsetting by BED regions |
@@ -280,11 +285,76 @@ Cluster-specific SLURM executor plugin settings. Used automatically when the lau
 
 ---
 
+## UMI / Molecular Barcodes
+
+Libraries with inline molecular barcodes (UMIs) require extracting the barcode and skipping stem/dark bases **before** 3' adapter/overlap trimming and alignment. Otherwise, 5' barcode bases produce soft-clips or read-end mismatches, and short inserts that read through into the opposite mate retain a 3' mate-barcode remnant ahead of the standard adapter sequence.
+
+### Data flow
+
+When `umi.enabled: true`, the pipeline runs:
+
+```
+fgbio FastqToBam -> samtools fastq -T RX -> bbduk -> bwa -C -> MarkDuplicates BARCODE_TAG
+```
+
+1. **`umi_extract`** (`fgbio FastqToBam` piped to `samtools fastq -T RX`): extracts inline UMI bases into the `RX` tag, strips 5' UMI and skip/dark bases from both R1 and R2 according to the resolved fgbio read structure, and emits paired FASTQs with `RX:Z:<R1_UMI>-<R2_UMI>` in the FASTQ header comment (dropping the original Illumina read comment so `bwa mem -C` emits a valid SAM tag).
+2. **`trim_adapters`** (`bbduk.sh` with `tbo=t tpe=t`): because both 5' barcodes and dark bases have already been stripped, mate-overlap detection (`tbo=t`) identifies the exact genomic insert on short read-through fragments and trims both the 3' reverse-complement mate-MBC remnant and the 3' adapter while preserving the `RX:Z:` read comment.
+3. **`bwa_map`** (`bwa mem -C`): appends the FASTQ header comment (`RX:Z:...`) directly to every aligned BAM record.
+4. **`deduplicate_bam_files`** (`gatk MarkDuplicates`): passes `--BARCODE_TAG RX` (and `--DUPLEX_UMI true` when `umi.duplex: true`) for UMI-aware duplicate marking.
+5. **Run provenance**: the resolved preset, fgbio read structure, UMI tag, and protocol source are logged and written to `{output_folder}/logs/umi_provenance.yaml`.
+
+### Configuration reference
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `umi.enabled` | `bool` | `false` | Master switch. When `false`, DAG and commands are identical to standard non-UMI mode. |
+| `umi.preset` | `str \| null` | `null` | Verified kit preset from `config/umi_presets.yaml` (`agilent_xths2` or `custom`). Mutually exclusive with `umi.read_structures` when enabled (unless `custom`). |
+| `umi.read_structures` | `str \| null` | `null` | Paired-end [fgbio read structures](https://github.com/fulcrumgenomics/fgbio/wiki/Read-Structures) (e.g. `"3M2S+T 3M2S+T"`). Overrides preset. |
+| `umi.umi_tag` | `str` | `"RX"` | Two-character SAM tag used by `fgbio FastqToBam` and `samtools fastq -T`. |
+| `umi.duplex` | `bool` | `true` | Pass `--DUPLEX_UMI true` to GATK `MarkDuplicates`. |
+| `umi.dedup.barcode_tag` | `str \| null` | `"RX"` | Tag passed to `MarkDuplicates --BARCODE_TAG` (`null` = position-only duplicate marking). |
+| `umi.dedup.extra` | `str` | `""` | Extra CLI arguments appended to `MarkDuplicates` when UMI mode is enabled. |
+| `umi.fgbio.fastq_to_bam_extra` | `str` | `""` | Extra CLI arguments passed through to `fgbio FastqToBam`. |
+| `umi.fgbio.mem_mb` | `int` | `8000` | Default memory allocation (MB) for `umi_extract` (overridable via workflow profile). |
+
+### Worked example: Agilent SureSelect XT HS2 (G9984A)
+
+Agilent SureSelect XT HS2 DNA libraries carry a **3-nt molecular barcode (MBC) followed by 2 dark bases at the 5' end of both Read 1 and Read 2** (*Agilent SureSelect XT HS2 DNA System Protocol*, publication G9985-90010, pp. 128, 134). All 5 leading bases (`3M2S+T 3M2S+T`) must be removed prior to alignment:
+
+```yaml
+trimming:
+  enabled: true
+
+umi:
+  enabled: true
+  preset: agilent_xths2          # resolves to "3M2S+T 3M2S+T" (Agilent G9985-90010, pp. 128, 134)
+  umi_tag: RX
+  duplex: true
+  dedup:
+    barcode_tag: RX
+```
+
+### How to add a kit
+
+1. **Ad-hoc custom kit (no code changes):** set `umi.preset: custom` (or `null`) and specify the paired-end fgbio read structure directly in `config/config.yaml`:
+   ```yaml
+   umi:
+     enabled: true
+     preset: custom
+     read_structures: "5M2S+T 5M2S+T"
+   ```
+2. **Permanent verified preset:**
+   - Verify the exact R1/R2 barcode and skip/stem structure in the vendor protocol documentation.
+   - Add an entry to `config/umi_presets.yaml` with `description`, `read_structures`, `duplex`, and `source` (vendor document number and page).
+   - Add the preset key to the `umi.preset` enum (and `then.oneOf` preset list) in `workflow/schemas/config.schema.yaml`.
+
+---
+
 ## Tools & Conda Environments
 
 | Conda env | Tools | Used by |
 |---|---|---|
-| `workflow/envs/bwa_samtools.yaml` | bwa 0.7.18, samtools 1.21, samblaster 0.1.26 | alignment, merge, utilities, samtools QC |
+| `workflow/envs/bwa_samtools.yaml` | bwa 0.7.18, samtools 1.21, samblaster 0.1.26, fgbio 3.1.2 | UMI extraction, alignment, merge, utilities, samtools QC |
 | `workflow/envs/gatk.yaml` | gatk4 4.6.1.0, samtools 1.21 | dedup, BQSR, Picard metrics |
 | `workflow/envs/bbtools.yaml` | bbmap 39.06 | trimming |
 | `workflow/envs/fastqc.yaml` | fastqc 0.12.1 | FASTQ quality control |
@@ -312,7 +382,7 @@ Install all tools directly into your `snakemake` environment and disable per-rul
 ```bash
 # Install tools into the snakemake environment
 mamba install -n snakemake -c bioconda -c conda-forge \
-    bwa=0.7.18 samtools=1.21 samblaster=0.1.26 gatk4=4.6.1.0 bbmap=39.06
+    bwa=0.7.18 samtools=1.21 samblaster=0.1.26 fgbio=3.1.2 gatk4=4.6.1.0 bbmap=39.06
 ```
 
 Then comment out `software-deployment-method` in `profiles/default/config.yaml` or pass `--sdm none` on the CLI:
@@ -330,7 +400,7 @@ QC runs automatically alongside the main pipeline (controlled by `qc.enabled` in
 ### What gets collected
 
 | Tool | Runs on | Metrics |
-|------|---------|---------|
+|---|---|---|
 | **FastQC** | Raw FASTQs (+ trimmed if enabled) | Per-base quality, adapter content, GC distribution, overrepresented sequences |
 | **samtools stats** | Final BAM | Error rate per cycle, base composition, insert size, indel distribution |
 | **samtools flagstat** | Final BAM | Total/mapped/paired/duplicate read counts |

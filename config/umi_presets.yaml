@@ -1,0 +1,12 @@
+# =============================================================================
+# config/umi_presets.yaml — Verified UMI / molecular barcode kit presets
+# =============================================================================
+# Only add presets whose read structure has been verified directly against
+# vendor protocol documentation. Cite the vendor document ID and page numbers.
+# =============================================================================
+
+agilent_xths2:
+  description: "Agilent SureSelect XT HS2 (G9984A): 3-nt MBC + 2 dark bases at 5' end of R1 and R2"
+  read_structures: "3M2S+T 3M2S+T"
+  duplex: true
+  source: "Agilent SureSelect XT HS2 DNA System Protocol (G9985-90010, pp. 128, 134)"

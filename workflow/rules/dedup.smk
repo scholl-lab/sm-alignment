@@ -1,6 +1,3 @@
-import re
-
-
 rule deduplicate_bam_files:
     """Mark PCR duplicates with GATK MarkDuplicates."""
     input:
@@ -13,16 +10,15 @@ rule deduplicate_bam_files:
         metrics=os.path.join(DEDUP_DIR, "{sample}" + DEDUP_METRICS_SUFFIX),
     params:
         java_opts=get_java_opts,
-        extra=re.sub(
-            r"--CREATE_INDEX(?:\s+|=)\S+",
-            "",
+        extra=_format_mark_duplicates_extra_impl(
             config.get("params", {})
             .get("gatk", {})
             .get(
                 "MarkDuplicates",
                 "--VALIDATION_STRINGENCY LENIENT --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500",
             ),
-        ).strip(),
+            UMI_CFG,
+        ),
     threads: 4
     resources:
         runtime=480,

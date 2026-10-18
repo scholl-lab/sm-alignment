@@ -34,6 +34,10 @@ include: "rules/qc.smk"
 ALL_SAMPLES = get_samples()
 
 
+onstart:
+    _write_umi_provenance_impl(LOG_DIR, UMI_CFG)
+
+
 rule all:
     input:
         expand(

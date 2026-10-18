@@ -10,7 +10,10 @@ rule bwa_map:
         read_group=lambda wc: _format_read_group_impl(samples_df, wc.basename, PLATFORM),
         sort_threads=2,
         sort_mem=4000,
-        extra=config.get("params", {}).get("bwa_mem", {}).get("extra", "-K 100000000 -Y"),
+        extra=_format_bwa_extra_impl(
+            config.get("params", {}).get("bwa_mem", {}).get("extra", "-K 100000000 -Y"),
+            UMI_ENABLED,
+        ),
     threads: 16
     resources:
         runtime=480,
