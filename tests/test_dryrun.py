@@ -600,3 +600,199 @@ class TestDryRun:
         prov = yaml.safe_load(prov_file.read_text())
         assert prov["umi"]["read_structures"] == "3M2S+T 3M2S+T"
         assert prov["umi"]["preset"] == "agilent_xths2"
+
+    def test_multiqc_fixture_execution(self, tmp_path):
+        """Run multiqc rule on fixture QC files and verify declared outputs and retry safety (#49)."""
+        import zipfile
+
+        samples_tsv = tmp_path / "samples.tsv"
+        samples_tsv.write_text(
+            "fastq_files_basename\tlane\tproject_sample\tmdc_project\n"
+            "SampleA_S1_L001\tL001\tSampleA\tTestProject\n"
+            "SampleB_S2_L001\tL001\tSampleB\tTestProject\n"
+        )
+
+        out_dir = tmp_path / "out"
+        qc_dir = out_dir / "qc"
+        (qc_dir / "fastqc" / "raw").mkdir(parents=True)
+        (qc_dir / "samtools").mkdir(parents=True)
+        (qc_dir / "picard").mkdir(parents=True)
+        (out_dir / "dedup").mkdir(parents=True)
+
+        for bn in ("SampleA_S1_L001", "SampleB_S2_L001"):
+            for read in ("R1", "R2"):
+                stem = f"{bn}_{read}_001"
+                zf_path = qc_dir / "fastqc" / "raw" / f"{stem}_fastqc.zip"
+                with zipfile.ZipFile(zf_path, "w") as zf:
+                    zf.writestr(
+                        f"{stem}_fastqc/fastqc_data.txt",
+                        "##FastQC\t0.12.1\n"
+                        ">>Basic Statistics\tpass\n"
+                        "#Measure\tValue\n"
+                        f"Filename\t{stem}.fastq.gz\n"
+                        "Total Sequences\t100\n"
+                        "Sequences flagged as poor quality\t0\n"
+                        "Sequence length\t150\n"
+                        "%GC\t50\n"
+                        ">>END_MODULE\n",
+                    )
+
+        for sample, extra_orientation, extra_hist_col, extra_hist_val in (
+            ("SampleA", "", "", ""),
+            (
+                "SampleB",
+                "120\t120\t10\t100\t200\t120.0\t15.0\t50\tRF\t5\t10\t15\t20\t25\t30\t35\t40\t45\t47\t49\t\t\t\n",
+                "\tAll_Reads.rf_count",
+                "\t5",
+            ),
+        ):
+            (qc_dir / "samtools" / f"{sample}.stats.txt").write_text(
+                "SN\traw total sequences:\t100\nSN\treads mapped:\t100\n"
+            )
+            (qc_dir / "samtools" / f"{sample}.flagstat.txt").write_text(
+                "100 + 0 in total (QC-passed reads + QC-failed reads)\n"
+                "100 + 0 mapped (100.00% : N/A)\n"
+            )
+            (
+                qc_dir / "picard" / f"{sample}.multiple_metrics.alignment_summary_metrics"
+            ).write_text(
+                "## METRICS CLASS\tpicard.analysis.AlignmentSummaryMetrics\n"
+                "CATEGORY\tTOTAL_READS\tPF_READS\tPCT_PF_READS\tPF_NOISE_READS\tPF_READS_ALIGNED\t"
+                "PCT_PF_READS_ALIGNED\tPF_ALIGNED_BASES\tPF_HQ_ALIGNED_READS\tPF_HQ_ALIGNED_BASES\t"
+                "PF_HQ_ALIGNED_Q20_BASES\tPF_HQ_MEDIAN_MISMATCHES\tPF_MISMATCH_RATE\tPF_HQ_ERROR_RATE\t"
+                "PF_INDEL_RATE\tMEAN_READ_LENGTH\tREADS_ALIGNED_IN_PAIRS\tPCT_READS_ALIGNED_IN_PAIRS\t"
+                "BAD_CYCLES\tSTRAND_BALANCE\tPCT_CHIMERAS\tPCT_ADAPTER\tSAMPLE\tLIBRARY\tREAD_GROUP\n"
+                "PAIR\t100\t100\t1.0\t0\t100\t1.0\t15000\t100\t15000\t14000\t0\t0.001\t0.001\t0.0001\t"
+                "150\t100\t1.0\t0\t0.5\t0.0\t0.0\t\t\t\n"
+            )
+            (qc_dir / "picard" / f"{sample}.multiple_metrics.insert_size_metrics").write_text(
+                "## htsjdk.samtools.metrics.StringHeader\n"
+                "# Started on: Mon Oct 19 00:00:00 CEST 2026\n\n"
+                "## METRICS CLASS\tpicard.analysis.InsertSizeMetrics\n"
+                "MEDIAN_INSERT_SIZE\tMODE_INSERT_SIZE\tMEDIAN_ABSOLUTE_DEVIATION\tMIN_INSERT_SIZE\t"
+                "MAX_INSERT_SIZE\tMEAN_INSERT_SIZE\tSTANDARD_DEVIATION\tREAD_PAIRS\tPAIR_ORIENTATION\t"
+                "WIDTH_OF_10_PERCENT\tWIDTH_OF_20_PERCENT\tWIDTH_OF_30_PERCENT\tWIDTH_OF_40_PERCENT\t"
+                "WIDTH_OF_50_PERCENT\tWIDTH_OF_60_PERCENT\tWIDTH_OF_70_PERCENT\tWIDTH_OF_80_PERCENT\t"
+                "WIDTH_OF_90_PERCENT\tWIDTH_OF_95_PERCENT\tWIDTH_OF_99_PERCENT\tSAMPLE\tLIBRARY\tREAD_GROUP\n"
+                "150\t150\t10\t100\t200\t150.0\t15.0\t1000\tFR\t5\t10\t15\t20\t25\t30\t35\t40\t45\t47\t49\t\t\t\n"
+                f"{extra_orientation}\n"
+                "## HISTOGRAM\tjava.lang.Integer\n"
+                f"insert_size\tAll_Reads.fr_count{extra_hist_col}\n"
+                f"100\t10{extra_hist_val}\n"
+                f"150\t80{extra_hist_val}\n"
+                f"200\t10{extra_hist_val}\n"
+            )
+            (qc_dir / "picard" / f"{sample}.validate_sam.txt").write_text("No errors found\n")
+            (out_dir / "dedup" / f"{sample}.merged.dedup_metrics.txt").write_text(
+                "## METRICS CLASS\tpicard.sam.DuplicationMetrics\n"
+                "LIBRARY\tUNPAIRED_READS_EXAMINED\tREAD_PAIRS_EXAMINED\tSECONDARY_OR_SUPPLEMENTARY_RDS\t"
+                "UNMAPPED_READS\tUNPAIRED_READ_DUPLICATES\tREAD_PAIR_DUPLICATES\t"
+                "READ_PAIR_OPTICAL_DUPLICATES\tPERCENT_DUPLICATION\tESTIMATED_LIBRARY_SIZE\n"
+                f"{sample}\t0\t50\t0\t0\t0\t2\t0\t0.04\t1200\n"
+            )
+
+        cfg = _write_config(
+            tmp_path,
+            "cfg_mqc.yaml",
+            paths={
+                "samples": str(samples_tsv),
+                "output_folder": str(out_dir),
+            },
+            qc={"enabled": True},
+        )
+
+        snk_bin = shutil.which("snakemake")
+        mqc_bin = shutil.which("multiqc")
+        assert snk_bin is not None
+        assert mqc_bin is not None, "multiqc binary is required for test_multiqc_fixture_execution"
+
+        report_html = qc_dir / "multiqc_report.html"
+        data_dir = qc_dir / "multiqc_report_data"
+        log_file = out_dir / "logs" / "multiqc.log"
+
+        run1 = subprocess.run(
+            [
+                snk_bin,
+                "-s",
+                str(SNAKEFILE),
+                "--configfile",
+                str(cfg),
+                "--workflow-profile",
+                "none",
+                "--directory",
+                str(tmp_path),
+                "--cores",
+                "1",
+                str(report_html),
+                "--allowed-rules",
+                "multiqc",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert run1.returncode == 0, (
+            f"MultiQC Snakemake run 1 failed:\nstdout: {run1.stdout}\nstderr: {run1.stderr}"
+        )
+        assert report_html.is_file()
+        assert data_dir.is_dir()
+        assert any(data_dir.iterdir())
+
+        # Simulate a retry or in-place rerun where multiqc_report_data/ already exists in qc/
+        # (both via direct multiqc invocation with the rule's flags and via Snakemake --force).
+        direct_rerun = subprocess.run(
+            [
+                mqc_bin,
+                "--force",
+                "--data-dir",
+                "--outdir",
+                str(qc_dir),
+                "--filename",
+                "multiqc_report.html",
+                "--ignore",
+                "multiqc_report_data",
+                "--ignore",
+                "multiqc_data",
+                "--ignore",
+                "multiqc_report_plots",
+                str(qc_dir),
+                str(out_dir / "dedup"),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert direct_rerun.returncode == 0, direct_rerun.stderr
+        assert "Updating module" not in direct_rerun.stderr
+        assert "Error loading plot input data" not in direct_rerun.stderr
+
+        run2 = subprocess.run(
+            [
+                snk_bin,
+                "-s",
+                str(SNAKEFILE),
+                "--configfile",
+                str(cfg),
+                "--workflow-profile",
+                "none",
+                "--directory",
+                str(tmp_path),
+                "--cores",
+                "1",
+                "--force",
+                str(report_html),
+                "--allowed-rules",
+                "multiqc",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert run2.returncode == 0, (
+            f"MultiQC Snakemake run 2 failed:\nstdout: {run2.stdout}\nstderr: {run2.stderr}"
+        )
+        assert report_html.is_file()
+        assert data_dir.is_dir()
+        log_text = log_file.read_text()
+        assert "Updating module" not in log_text
+        assert "Error loading plot input data" not in log_text
