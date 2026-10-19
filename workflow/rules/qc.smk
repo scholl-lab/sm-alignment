@@ -422,7 +422,7 @@ rule multiqc:
         _collect_multiqc_inputs,
     output:
         report=os.path.join(QC_DIR, "multiqc_report.html"),
-        data=directory(os.path.join(QC_DIR, "multiqc_data")),
+        data=directory(os.path.join(QC_DIR, "multiqc_report_data")),
     params:
         outdir=QC_DIR,
         search_dirs=lambda wc: f'"{QC_DIR}" "{DEDUP_DIR}"',
@@ -436,8 +436,12 @@ rule multiqc:
         r"""
         multiqc \
             --force \
+            --data-dir \
             --outdir "{params.outdir}" \
             --filename multiqc_report.html \
+            --ignore "multiqc_report_data" \
+            --ignore "multiqc_data" \
+            --ignore "multiqc_report_plots" \
             {params.extra} \
             {params.search_dirs} \
             2> {log}

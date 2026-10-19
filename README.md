@@ -245,7 +245,7 @@ tail -f slurm_logs/slurm-*.log
 | `trimming` | Set `enabled: true` to run BBDuk adapter trimming before alignment |
 | `umi` | UMI / molecular barcode extraction (`fgbio FastqToBam`) and UMI-aware duplicate marking (`--BARCODE_TAG`, `--DUPLEX_UMI`) |
 | `qc` | Quality control: `enabled`, per-tool toggles (`fastqc`, `samtools_stats`, `samtools_flagstat`, `picard_collect_metrics`, `qualimap`) |
-| `params` | Extra CLI flags passed through to bwa, samtools, GATK tools |
+| `params` | Extra CLI flags passed through to bwa, samtools, GATK, and MultiQC |
 | `subset` | Optional BAM subsetting by BED regions |
 
 ### `config/samples.tsv`
@@ -433,7 +433,7 @@ Set `qc.enabled: false` to skip all QC and produce only BAM files (pipeline beha
 ├── picard/              # CollectMultipleMetrics output files
 ├── qualimap/            # (when qc.qualimap: true)
 ├── multiqc_report.html  # ← aggregated report
-└── multiqc_data/
+└── multiqc_report_data/
 ```
 
 ---

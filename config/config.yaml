@@ -60,6 +60,8 @@ params:
     MarkDuplicates: "--VALIDATION_STRINGENCY LENIENT --OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500"
     BaseRecalibrator: ""
     ApplyBQSR: ""
+  multiqc:
+    extra: ""
 
 # --- BBDuk trimming parameters ---
 trimming:

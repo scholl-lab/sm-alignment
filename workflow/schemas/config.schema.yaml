@@ -152,6 +152,12 @@ properties:
           CollectHsMetrics:
             type: string
             default: ""
+      multiqc:
+        type: object
+        properties:
+          extra:
+            type: string
+            default: ""
 
   trimming:
     type: object

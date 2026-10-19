@@ -56,9 +56,10 @@ jobs:
             samtools=1.21
             fgbio=3.1.2
             bbmap=39.06
+            multiqc=1.33
 
       - name: Run unit tests
         shell: bash -el {0}
         run: |
-          which fgbio samtools bbduk.sh bwa snakemake
+          which fgbio samtools bbduk.sh bwa multiqc snakemake
           pytest

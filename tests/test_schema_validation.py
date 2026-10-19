@@ -186,6 +186,19 @@ class TestConfigSchema:
         with pytest.raises(_SchemaError):
             snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
 
+    def test_params_multiqc_extra_valid(self, valid_config):
+        """params.multiqc.extra string should pass schema validation."""
+        cfg = copy.deepcopy(valid_config)
+        cfg.setdefault("params", {})["multiqc"] = {"extra": "--title MyReport"}
+        snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
+    def test_params_multiqc_extra_invalid_type(self, valid_config):
+        """Non-string params.multiqc.extra must be rejected by schema."""
+        cfg = copy.deepcopy(valid_config)
+        cfg.setdefault("params", {})["multiqc"] = {"extra": 123}
+        with pytest.raises(_SchemaError):
+            snakemake_validate(cfg, str(SCHEMA_DIR / "config.schema.yaml"))
+
 
 # ============================================================================
 # Samples schema tests
